@@ -23,6 +23,8 @@ Tokens folow the type:
 const OPERATORS: [char; 7] = ['+', '-', '*', '/', '=', '<', '>'];
 const PUNCTUATIONS: [char; 7] = ['.', ',', '(', ')', '{', '}', ';'];
 
+const TWO_CHAR_COMP_OPERATORS: [char; 3] = ['>', '<', '='];
+
 const LITERAL_IDENTIFIER: char = '\'';
 const WHITESPACE: char = ' ';
 const NEWLINE: char = '\n';
@@ -48,6 +50,8 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut current_token: Option<Token> = None;
     let mut line_num: u32 = 0;
+
+    let mut two_char_operator: bool = false;
 
     for character_idx in 0..code.len() {
         let character = code.chars().nth(character_idx).unwrap();
@@ -83,15 +87,34 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
             });
             current_token = None;
         } else if OPERATORS.contains(&character) && !currently_literal(&current_token) {
-            push_if_not_none(&mut tokens, &current_token);
-            tokens.push(Token {
-                token_type: TokenType::Operator,
-                value: character.to_string(),
-                line: line_num,
-                column: character_idx as u32,
-            });
+            if two_char_operator {
+                current_token.as_mut().unwrap().value.push(character);
+                push_if_not_none(&mut tokens, &current_token);
+                two_char_operator = false;
+                current_token = None;
+            } else if is_two_char_seq(&character, code.chars().nth(character_idx + 1)) {
+                // check if it should start a 2 char operator sequence
+                push_if_not_none(&mut tokens, &current_token);
+                two_char_operator = true;
+                current_token = Some(Token {
+                    token_type: TokenType::Operator,
+                    value: character.to_string(),
+                    line: line_num,
+                    column: character_idx as u32,
+                });
+                // if no then just do insert and move forward, else do something else
+            } else {
+                // if not 2 char operator
+                push_if_not_none(&mut tokens, &current_token);
+                tokens.push(Token {
+                    token_type: TokenType::Operator,
+                    value: character.to_string(),
+                    line: line_num,
+                    column: character_idx as u32,
+                });
 
-            current_token = None;
+                current_token = None;
+            }
         } else if character == LITERAL_IDENTIFIER && !currently_literal(&current_token) {
             push_if_not_none(&mut tokens, &current_token);
             current_token = Some(Token {
@@ -172,6 +195,16 @@ fn push_if_not_none(tokens: &mut Vec<Token>, curr: &Option<Token>) {
     if let Some(existing) = curr {
         tokens.push(existing.clone());
     }
+}
+
+fn is_two_char_seq(character: &char, next_char: Option<char>) -> bool {
+    if next_char.is_none() {
+        return false;
+    }
+
+    (*character == '<' && next_char.unwrap() == '=')
+        || (*character == '>' && next_char.unwrap() == '=')
+        || (*character == '=' && next_char.unwrap() == '=')
 }
 
 fn main() {
