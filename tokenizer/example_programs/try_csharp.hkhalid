@@ -1,0 +1,11 @@
+public Test {
+  private Logger logger;
+
+  public Test(Logger logger) {
+    this.logger = logger;
+  }
+
+  public void Run() {
+     this.logger = logger;
+  }
+}

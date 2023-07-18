@@ -21,7 +21,7 @@ Tokens folow the type:
 * */
 
 const OPERATORS: [char; 7] = ['+', '-', '*', '/', '=', '<', '>'];
-const PUNCTUATIONS: [char; 5] = ['(', ')', '{', '}', ';'];
+const PUNCTUATIONS: [char; 7] = ['.', ',', '(', ')', '{', '}', ';'];
 
 const LITERAL_IDENTIFIER: char = '\'';
 const WHITESPACE: char = ' ';
