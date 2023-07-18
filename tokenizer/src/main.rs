@@ -198,7 +198,7 @@ fn push_if_not_none(tokens: &mut Vec<Token>, curr: &Option<Token>) {
 }
 
 fn is_two_char_seq(character: &char, next_char: Option<char>) -> bool {
-    if next_char.is_none() {
+    if next_char.is_none() || !TWO_CHAR_COMP_OPERATORS.contains(character) {
         return false;
     }
 
