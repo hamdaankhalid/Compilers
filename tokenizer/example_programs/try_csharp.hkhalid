@@ -9,7 +9,7 @@ public Test {
     this.logger = logger;
     int i = 0;
     while(i <= 5) {
-      this.logger.LogInformation('its me mario');
+      this.logger.LogInformation("its me mario");
     }
   }
 }

@@ -1,0 +1,17 @@
+int calculateFactorial(int number) {
+  if (number == 0) {
+    return 1;
+  } else {
+    return number * calculateFactorial(number - 1);
+  }
+}
+
+int main() {
+  int number;
+  printf("Enter a number: ");
+  scanf("%d", &number);
+
+  int factorial = calculateFactorial(number);
+  printf("The factorial of %d is %d\n", number, factorial);
+  return 0;
+}

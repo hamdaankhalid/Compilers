@@ -21,13 +21,16 @@ Tokens folow the type:
 * */
 
 const OPERATORS: [char; 7] = ['+', '-', '*', '/', '=', '<', '>'];
-const PUNCTUATIONS: [char; 7] = ['.', ',', '(', ')', '{', '}', ';'];
-
+const PUNCTUATIONS: [char; 8] = [':', '.', ',', '(', ')', '{', '}', ';'];
 const TWO_CHAR_COMP_OPERATORS: [char; 3] = ['>', '<', '='];
 
-const LITERAL_IDENTIFIER: char = '\'';
+const LITERAL_IDENTIFIER: char = '"';
 const WHITESPACE: char = ' ';
 const NEWLINE: char = '\n';
+
+const KEYWORDS: [&str; 9] = [
+    "func", "const", "let", "if", "let", "while", "for", "num", "char",
+];
 
 #[derive(Clone, Debug)]
 enum TokenType {
@@ -55,7 +58,6 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
 
     for character_idx in 0..code.len() {
         let character = code.chars().nth(character_idx).unwrap();
-
         // println!("{} at idx {} {:?}", character, character_idx, current_token);
 
         if character == WHITESPACE && !currently_literal(&current_token) {
@@ -179,6 +181,15 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
         }
         tokens.push(remaining.clone());
     }
+
+    // I guess find out which keywords in the language?
+    for ele in tokens.iter_mut() {
+        if KEYWORDS.contains(&ele.value.as_str()) && matches!(ele.token_type, TokenType::Identifier)
+        {
+            ele.token_type = TokenType::Keyword;
+        }
+    }
+
     Ok(tokens)
 }
 

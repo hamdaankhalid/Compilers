@@ -1,0 +1,9 @@
+func main() {
+  const x: num = 2;
+
+  const y: num = 5;
+
+  const z: num =  x + y;
+
+  return y
+}
