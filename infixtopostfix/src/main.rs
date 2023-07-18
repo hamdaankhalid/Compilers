@@ -51,15 +51,13 @@ fn get_operator(operator: char) -> Result<Operator, String> {
     }
 }
 
-// 12+32   - 45 /3 0
 fn tokenize(expr: String) -> Result<Vec<Tokens>, String> {
-    let mut counter: i32 = 0;
     let mut tokens: Vec<Tokens> = Vec::new();
     let mut current_token: Option<Tokens> = None;
 
     for character in expr.chars() {
-        // is character a number or is it something else
         if character.is_whitespace() {
+            // Ignore whitespaces in an expression
             continue;
         } else if character.is_digit(10) {
             current_token = match current_token {
@@ -67,25 +65,19 @@ fn tokenize(expr: String) -> Result<Vec<Tokens>, String> {
                     Tokens::Num(mut num) => {
                         // already a num so just add the current digit to token
                         let mut num_str = num.value.to_string();
-
                         num_str.push(character);
-
                         num.value = num_str.parse().unwrap();
-
-                        counter += 1;
                         Some(Tokens::Num(num))
                     }
                     Tokens::Identifier(id) => {
                         // save the existing token to vector then create a new one
                         tokens.push(Tokens::Identifier(id));
-                        counter = 0;
                         Some(Tokens::Num(Num {
                             value: character.to_digit(10).unwrap() as i32,
                         }))
                     }
                     Tokens::Operator(op) => {
                         tokens.push(Tokens::Operator(op));
-                        counter = 0;
                         Some(Tokens::Num(Num {
                             value: character.to_digit(10).unwrap() as i32,
                         }))
@@ -119,13 +111,62 @@ fn tokenize(expr: String) -> Result<Vec<Tokens>, String> {
                     Some(Tokens::Operator(op))
                 }
             }
+        } else if character.is_alphabetic() {
+            current_token = match current_token {
+                Some(curr_tok) => match curr_tok {
+                    Tokens::Num(num) => {
+                        tokens.push(Tokens::Num(num));
+                        // initialize a string and add a character to it
+                        let mut lexeme = "".to_string();
+                        lexeme.push(character);
+                        Some(Tokens::Identifier(Identifier { lexme: lexeme }))
+                    }
+                    Tokens::Operator(op) => {
+                        tokens.push(Tokens::Operator(op));
+                        // initialize a string and add a character to it
+                        let mut lexeme = "".to_string();
+                        lexeme.push(character);
+                        Some(Tokens::Identifier(Identifier { lexme: lexeme }))
+                    }
+                    Tokens::Identifier(mut id) => {
+                        // add character to string
+                        id.lexme.push(character);
+                        Some(Tokens::Identifier(id))
+                    }
+                },
+                None => {
+                    let mut lexeme = "".to_string();
+                    lexeme.push(character);
+                    Some(Tokens::Identifier(Identifier { lexme: lexeme }))
+                }
+            }
         } else {
+            println!("Encountered {}", character);
             return Err("Syntax error".to_string());
         }
     }
 
     tokens.push(current_token.unwrap());
     Ok(tokens)
+}
+
+/*
+ * expr -> expr + term { print + }
+ *      |  expr - term { print - }
+ *      |  term
+ *
+ * term -> term * factor { print * }
+ *      |  term / factor { print / }
+ *      |  factor
+ *
+ * factor -> ( expr )
+ *      |  num { print num.value }
+ *      |  id { print id.lexeme }
+ * */
+fn postfix_to_infix_translate(expr_tokens: Vec<Tokens>) -> Vec<Tokens> {
+    let postfix_tokens: Vec<Tokens> = Vec::new();
+
+    postfix_tokens
 }
 
 fn translate(mut expr: String) {
@@ -207,5 +248,13 @@ fn main() {
     println!("Tokenize {}", test);
     if let Ok(result) = tokenize(test) {
         println!("{:?}", result);
+    }
+
+    let test = "cat 12 + 3- horse * b /4".to_string();
+    println!("Tokenize {}", test);
+    if let Ok(result) = tokenize(test) {
+        println!("{:?}", result);
+    } else {
+        println!("Uh oh");
     }
 }
