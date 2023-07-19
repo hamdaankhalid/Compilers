@@ -1,9 +1,47 @@
-func main() {
+structure Cat {
+    name: string; 
+    age: num;
+}
+
+function meow(c: addr Cat) : nothing {
+    let cat: Cat = dataAt c;
+    print(cat.name);    
+}
+
+function main() {
   const x: num = 2;
 
   const y: num = 5;
 
   const z: num =  x + y;
+    
+  let cat = Cat {name = "spark", age: 4};
+  let celebrate = false;
 
+  let i = 5;
+  while (i <= 15) {
+    cat.age = cat.age + 1;
+    print("meow");
+    if (cat.age % 2 == 0) {
+        meow(addrOf cat);
+    }
+
+    if (cat.age % 3 == 0) {
+        celebrate = false;
+    }
+    
+    if (cat.age == 5 and celebrate) {
+        print("cute cat celebrating on fifth birthday");
+    }
+
+    if (cat.age == 9 xor celebrate) {
+        print("cute cat is 9 or maybe its just celebrating bro");
+    }
+  }
+
+  print("square the age for some weird reason");
+
+  cat.age = cat.age^2;
+  
   return y
 }

@@ -2,6 +2,7 @@ use std::env;
 use std::fs;
 
 /*
+ *sed -i '' -e 's/\t/    /g' ./example_programs/my_lang.hkhalid
 * Tokenize a C like syntax program after reading the file name from cli
 Tokens folow the type:
     interface Token {
@@ -20,25 +21,66 @@ Tokens folow the type:
    'Punctuation': Represents punctuation marks, such as ,, ;, (, ), etc.
 * */
 
-const OPERATORS: [char; 7] = ['+', '-', '*', '/', '=', '<', '>'];
+const OPERATORS: [char; 9] = ['+', '-', '*', '/', '=', '<', '>', '%', '^'];
 const PUNCTUATIONS: [char; 8] = [':', '.', ',', '(', ')', '{', '}', ';'];
-const TWO_CHAR_COMP_OPERATORS: [char; 3] = ['>', '<', '='];
+const TWO_CHAR_COMP_OPERATORS: [char; 4] = ['>', '!', '<', '='];
 
+// This
 const LITERAL_IDENTIFIER: char = '"';
 const WHITESPACE: char = ' ';
 const NEWLINE: char = '\n';
 
-const KEYWORDS: [&str; 9] = [
-    "func", "const", "let", "if", "let", "while", "for", "num", "char",
+// Keywords in our language that are reserved, so any identifier during tokenization that has the
+// same value as a keyword is accounted for as a Keyword and not an identifier
+const KEYWORDS: [&str; 17] = [
+    "structure", // defining a user defined data structure
+    "function",  // decalring functions
+    "const",     // variables are declared as const, are constants
+    "let",       // mutable variables are decleared with let
+    "if",
+    "else",
+    "elif",
+    "while",
+    "for",
+    "nothing", // null
+    "num",     // i32 int
+    "float",   // f32 float
+    "char",    // character
+    "bool",    // boolean
+    "addr",    // primitive pointing to aa block of memory
+    "addrOf",  // used to get the memory of where data is stored
+    "dataAt",  // used to get the data at a memory location
 ];
+
+const RELOP_ID: [&str; 6] = ["<", "<=", ">=", "==", ">", "!="];
+const MATHEMATICALOP_ID: [&str; 7] = ["=", "+", "-", "*", "/", "%", "^"];
+const LOGICALOP_ID: [&str; 6] = ["and", "or", "xor", "bitwiseAnd", "bitwiseOr", "bitwiseXor"];
+
+#[derive(Clone, Debug)]
+enum IntermediateTokenType {
+    Identifier,
+    Literal,
+    Operator,
+    Punctuation,
+}
+
+#[derive(Clone, Debug)]
+struct IntermediateToken {
+    token_type: IntermediateTokenType,
+    value: String,
+    line: u32,
+    column: u32,
+}
 
 #[derive(Clone, Debug)]
 enum TokenType {
     Keyword,
     Identifier,
     Literal,
-    Operator,
     Punctuation,
+    Relop,
+    MathematicalOp,
+    LogicalOp,
 }
 
 #[derive(Clone, Debug)]
@@ -49,9 +91,20 @@ struct Token {
     column: u32,
 }
 
+fn intermediate_token_type_to_token_type(it: &IntermediateTokenType) -> Result<TokenType, String> {
+    let res = match it {
+        IntermediateTokenType::Literal => TokenType::Literal,
+        IntermediateTokenType::Identifier => TokenType::Identifier,
+        IntermediateTokenType::Punctuation => TokenType::Punctuation,
+        _ => return Err("Operator type is not handled by this function because operator should already have been broken down by here".to_string()),
+    };
+
+    Ok(res)
+}
+
 fn tokenize(code: String) -> Result<Vec<Token>, String> {
-    let mut tokens: Vec<Token> = Vec::new();
-    let mut current_token: Option<Token> = None;
+    let mut tokens: Vec<IntermediateToken> = Vec::new();
+    let mut current_token: Option<IntermediateToken> = None;
     let mut line_num: u32 = 0;
 
     let mut two_char_operator: bool = false;
@@ -81,8 +134,8 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
 
         if PUNCTUATIONS.contains(&character) && !currently_literal(&current_token) {
             push_if_not_none(&mut tokens, &current_token);
-            tokens.push(Token {
-                token_type: TokenType::Punctuation,
+            tokens.push(IntermediateToken {
+                token_type: IntermediateTokenType::Punctuation,
                 value: character.to_string(),
                 line: line_num,
                 column: character_idx as u32,
@@ -98,8 +151,8 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
                 // check if it should start a 2 char operator sequence
                 push_if_not_none(&mut tokens, &current_token);
                 two_char_operator = true;
-                current_token = Some(Token {
-                    token_type: TokenType::Operator,
+                current_token = Some(IntermediateToken {
+                    token_type: IntermediateTokenType::Operator,
                     value: character.to_string(),
                     line: line_num,
                     column: character_idx as u32,
@@ -108,8 +161,8 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
             } else {
                 // if not 2 char operator
                 push_if_not_none(&mut tokens, &current_token);
-                tokens.push(Token {
-                    token_type: TokenType::Operator,
+                tokens.push(IntermediateToken {
+                    token_type: IntermediateTokenType::Operator,
                     value: character.to_string(),
                     line: line_num,
                     column: character_idx as u32,
@@ -119,8 +172,8 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
             }
         } else if character == LITERAL_IDENTIFIER && !currently_literal(&current_token) {
             push_if_not_none(&mut tokens, &current_token);
-            current_token = Some(Token {
-                token_type: TokenType::Literal,
+            current_token = Some(IntermediateToken {
+                token_type: IntermediateTokenType::Literal,
                 value: "".to_string(),
                 line: line_num,
                 column: character_idx as u32,
@@ -144,7 +197,7 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
             if current_token.is_some()
                 && matches!(
                     &current_token.as_ref().unwrap().token_type,
-                    TokenType::Identifier
+                    IntermediateTokenType::Identifier
                 )
             {
                 current_token.as_mut().unwrap().value.push(character);
@@ -156,8 +209,8 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
                 .to_string());
             } else {
                 // current token is none in this case construct a new one for the identifier
-                current_token = Some(Token {
-                    token_type: TokenType::Identifier,
+                current_token = Some(IntermediateToken {
+                    token_type: IntermediateTokenType::Identifier,
                     value: character.to_string(),
                     line: line_num,
                     column: character_idx as u32,
@@ -182,27 +235,54 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
         tokens.push(remaining.clone());
     }
 
-    // I guess find out which keywords in the language?
-    for ele in tokens.iter_mut() {
-        if KEYWORDS.contains(&ele.value.as_str()) && matches!(ele.token_type, TokenType::Identifier)
-        {
-            ele.token_type = TokenType::Keyword;
-        }
-    }
+    // transform from intermediate to final token type
+    let final_tokens: Vec<Token> = tokens
+        .iter()
+        .map(|token| {
+            let mut token_type: Option<TokenType> = None;
+            if KEYWORDS.contains(&token.value.as_str())
+                && matches!(token.token_type, IntermediateTokenType::Identifier)
+            {
+                token_type = Some(TokenType::Keyword);
+            } else if RELOP_ID.contains(&token.value.as_str())
+                && matches!(token.token_type, IntermediateTokenType::Operator)
+            {
+                token_type = Some(TokenType::Relop);
+            } else if MATHEMATICALOP_ID.contains(&token.value.as_str())
+                && matches!(token.token_type, IntermediateTokenType::Operator)
+            {
+                token_type = Some(TokenType::MathematicalOp);
+            } else if LOGICALOP_ID.contains(&token.value.as_str())
+                && matches!(token.token_type, IntermediateTokenType::Identifier)
+            {
+                token_type = Some(TokenType::LogicalOp);
+            } else {
+                token_type =
+                    Some(intermediate_token_type_to_token_type(&token.token_type).unwrap());
+            }
 
-    Ok(tokens)
+            return Token {
+                token_type: token_type.expect("what the f"),
+                value: token.value.to_owned(),
+                column: token.column,
+                line: token.line,
+            };
+        })
+        .collect();
+
+    Ok(final_tokens)
 }
 
-fn currently_literal(token: &Option<Token>) -> bool {
+fn currently_literal(token: &Option<IntermediateToken>) -> bool {
     match token {
         None => false,
         Some(t) => {
-            matches!(t.token_type, TokenType::Literal)
+            matches!(t.token_type, IntermediateTokenType::Literal)
         }
     }
 }
 
-fn push_if_not_none(tokens: &mut Vec<Token>, curr: &Option<Token>) {
+fn push_if_not_none(tokens: &mut Vec<IntermediateToken>, curr: &Option<IntermediateToken>) {
     if let Some(existing) = curr {
         tokens.push(existing.clone());
     }
@@ -216,6 +296,7 @@ fn is_two_char_seq(character: &char, next_char: Option<char>) -> bool {
     (*character == '<' && next_char.unwrap() == '=')
         || (*character == '>' && next_char.unwrap() == '=')
         || (*character == '=' && next_char.unwrap() == '=')
+        || (*character == '!' && next_char.unwrap() == '=')
 }
 
 fn main() {
