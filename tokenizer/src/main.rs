@@ -16,7 +16,7 @@ Tokens folow the type:
 
    'Keyword': Represents keywords in the language, such as if, for, while, etc.
    'Identifier': Represents user-defined names or identifiers, such as variable names or function names.
-   'Literal': Represents literal values, such as numbers or strings.
+   'Literal': Represents literal values, such as strings.
    'Operator': Represents operators, such as +, -, *, /, etc.
    'Punctuation': Represents punctuation marks, such as ,, ;, (, ), etc.
 * */
@@ -76,6 +76,7 @@ struct IntermediateToken {
 enum TokenType {
     Keyword,
     Identifier,
+    Number,
     Literal,
     Punctuation,
     Relop,
@@ -83,6 +84,7 @@ enum TokenType {
     LogicalOp,
 }
 
+#[allow(unused)]
 #[derive(Clone, Debug)]
 struct Token {
     token_type: TokenType,
@@ -256,7 +258,12 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
                 && matches!(token.token_type, IntermediateTokenType::Identifier)
             {
                 token_type = Some(TokenType::LogicalOp);
-            } else {
+            } else if matches!(token.token_type, IntermediateTokenType::Identifier)
+                && is_number(&token.value.as_str()) {
+                    // we match only on identifier and not literal
+                    token_type = Some(TokenType::Number);
+                }
+            else {
                 token_type =
                     Some(intermediate_token_type_to_token_type(&token.token_type).unwrap());
             }
@@ -271,6 +278,17 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
         .collect();
 
     Ok(final_tokens)
+}
+
+fn is_number(s: &str) -> bool {
+    // Attempt to parse the string as a number
+    if let Some(_) = s.parse::<i32>().ok() {
+        true
+    } else if let Some(_) = s.parse::<f32>().ok() {
+        true
+    } else {
+        false
+    }
 }
 
 fn currently_literal(token: &Option<IntermediateToken>) -> bool {

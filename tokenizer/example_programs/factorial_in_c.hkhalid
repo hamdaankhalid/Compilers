@@ -9,7 +9,7 @@ int calculateFactorial(int number) {
 int main() {
   int number;
   printf("Enter a number: ");
-  scanf("%d", &number);
+  scanf("%d", number);
 
   int factorial = calculateFactorial(number);
   printf("The factorial of %d is %d\n", number, factorial);

@@ -24,10 +24,10 @@ function main() {
     print("meow");
     if (cat.age % 2 == 0) {
         meow(addrOf cat);
-    }
-
-    if (cat.age % 3 == 0) {
+    } elif (cat.age % 3 == 0) {
         celebrate = false;
+    } else {
+        print("its okay kitty")
     }
     
     if (cat.age == 5 and celebrate) {
