@@ -10,6 +10,8 @@ a state machine's execution.
 
 The algorithm maintains the current token when it starts iterating over the characters and based on the next character
 searches for a valid state to transition to, based on the found state it moves ahead. If no valid state is found to
-transition into the program shows the syntax error and it's location.
+transition into the program shows the syntax error and it's location. For pattern matching, although my tokens are not divided
+into regular expressions, you can see that the code actually is performing the exact same logic. I found this particularly interesting because when I reached chapter 3 I learned about how regular expressions are the bread and butter for pattern matching in 
+lexers.
 
 The next version after I finish chapter 3 will leverage regular expressions, and chunking to be more "production ready"
