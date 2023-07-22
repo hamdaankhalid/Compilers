@@ -22,7 +22,7 @@ struct State {
     actions: Vec<Action>,
 }
 
-fn simulation(dfa: Vec<State>, input: &String) -> Result<bool, String> {
+fn dfa_simulation(dfa: Vec<State>, input: &String) -> Result<bool, String> {
     let mut current_state = &dfa[0];
 
     println!("Init State -> {:?}", current_state);
@@ -64,17 +64,25 @@ fn simulation(dfa: Vec<State>, input: &String) -> Result<bool, String> {
     Ok(current_state.allowed_terminal)
 }
 
+fn nfa_simulation(dfa: Vec<State>, input: &String) -> Result<bool, String> {
+    // find the initial state
+    // see if either paths from initial state eventually leads to an accepting state
+}
+
 fn main() {
     // read dfa from json file
     // read input from cli
     // run through DFA
     let args: Vec<String> = env::args().collect();
-    if args.len() < 3 {
-        println!("Please provide a file name, and input string to run DFA against");
+    if args.len() < 4 {
+        println!(
+            "Please provide a flag --nfa or --dfa, file name, and input string to run DFA against"
+        );
         return;
     }
-    let file_name = &args[1];
-    let input_string = &args[2];
+    let nfa_or_dfa = &args[1];
+    let file_name = &args[2];
+    let input_string = &args[3];
 
     // Read the file contents into a String
     let file_contents = match fs::read_to_string(file_name) {
@@ -87,7 +95,14 @@ fn main() {
 
     let dfa: Vec<State> = serde_json::from_str(&file_contents).unwrap();
 
-    let result = simulation(dfa, input_string);
-
-    println!("{:?}", result);
+    if nfa_or_dfa == "--nfa" {
+        let result = nfa_simulation(dfa, input_string);
+        println!("{:?}", result);
+    } else if nfa_or_dfa == "--dfa" {
+        let result = dfa_simulation(dfa, input_string);
+        println!("{:?}", result);
+    } else {
+        println!("First arg has to be --nfa or --dfa");
+        return;
+    }
 }

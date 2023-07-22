@@ -1,5 +1,5 @@
 [package]
-name = "deterministic-finite-automata-simulation"
+name = "finite-automata-simulation"
 version = "0.1.0"
 edition = "2021"
 
