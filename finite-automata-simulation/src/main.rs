@@ -75,7 +75,9 @@ fn nfa_simulation(nfa: &Vec<State>, input: &String, current_state: &State) -> Re
 
     println!("{:?}", next_states);
 
-    let next_input: String = input.chars().skip(0).collect();
+    let next_input: String = input.chars().skip(1).collect();
+
+    println!("Next input {}", next_input);
 
     for state in next_states {
         if state.state == current_state.state {
@@ -100,10 +102,18 @@ fn find_available_states(nfa: &Vec<State>, curr_state: &State, action_char: &Str
         .map(|a| a.next_state.clone())
         .collect();
 
-    nfa.iter()
+    let next_states = nfa
+        .iter()
         .filter(|&s| next_actions.contains(&s.state))
         .map(|s| s.clone())
-        .collect()
+        .collect();
+
+    println!(
+        "Next states from state {:?} based on {} are {:?}",
+        curr_state, action_char, next_states
+    );
+
+    next_states
 }
 
 fn main() {
