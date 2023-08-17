@@ -38,6 +38,10 @@ public:
 	// Used during construction
 	void addNext(std::string, std::unique_ptr<Nfa>) {
 	}
+
+	// Concatenate
+	
+	// Alternation
 };
 
 int main() { 
