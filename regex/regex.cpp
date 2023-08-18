@@ -236,6 +236,10 @@ infixToPostFixTranslation(std::vector<std::string> infix) {
   return outputQueue;
 }
 
+
+// Create an NFA and change its topology as we iterate through the regular expression
+// return the NFA back to the invoker. This Nfa now has all the states and transitions
+// needed to be able to match a pattern
 std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
   // all our primitive operators can be treated as binary so I will
   // solve them the same way we do mathematical binary operators
