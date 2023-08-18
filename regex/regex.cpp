@@ -4,6 +4,7 @@
 #include <vector>
 #include <iostream>
 #include <unordered_map>
+#include <unordered_set>
 
 /*
  * Primitives:
@@ -52,59 +53,42 @@ Equivalence to Regular Languages: ε-NFAs are capable of recognizing the same cl
 class Nfa {
 private:
 
-	int name;
-
-	bool acceptingState;
-
-	// multiple exits given a Concatenation means only one exit from this state to next
-	// an alternation means multiple exits
-	std::unordered_map<std::string, std::shared_ptr<Nfa> > relations;
+	std::unordered_set<int> finalStates;
+	std::unordered_map<int, std::unordered_set<int> > epsilonTransitions;
+	std::unordered_map<int, std::unordered_map<std::string, std::unordered_set<int> > > transitions;
 
 public:
-	static int stateCounter;
+	
+	int stateCounter = 0;
 
 	static std::shared_ptr<Nfa> createEpsilonNfa() {
-		std::shared_ptr<Nfa> root(new Nfa(stateCounter, true));
-		std::shared_ptr<Nfa> baseCaseAcceptingState(new Nfa(-1, true));
-		root->addRelation("EPSILON", baseCaseAcceptingState);
-		stateCounter++;
-		return root;
+		std::shared_ptr<Nfa> base(new Nfa);
+		base->addEpsilonTransition(0, 1);
+
+		base->stateCounter+=2;
+
+		base->addFinalState(1);
+
+		return base;
 	}
 	
-	static std::shared_ptr<Nfa> createStateForSubexpressionA(std::shared_ptr<Nfa> a) {
-		std::shared_ptr<Nfa> newState(new Nfa(stateCounter, true));
-		std::shared_ptr<Nfa> baseCaseAcceptingState(new Nfa(-1, true));
-		
-		newState->addRelation("subexpr A", a);
-		a->addRelation("concat with parent's accepting state", baseCaseAcceptingState);
+	Nfa() {}
 
-		stateCounter++;
-
-		return newState;
+	void addTransition(int fromState, const std::string& symbol, int toState) {
+		this->transitions[fromState][symbol].insert(toState);
 	}
 
-	Nfa(int name, bool isAcceptance) : name(name), acceptingState(isAcceptance) {}	
-
-	void addRelation(const std::string& action, std::shared_ptr<Nfa> next) {
-		this->relations.insert(std::make_pair(action, next));
+	void addEpsilonTransition(int fromState, int toState) {
+		this->epsilonTransitions[fromState].insert(toState);
 	}
-	
-	void printDfs(int depth = 0) const {
-		// print indentation
-		std::string space;
-		if (depth != 0) {
-			for (int i = 0; i < depth; i++) {
-				space+= ' ';
-			}
-		}
-		std::cout << space;
-		// print self
-		std::cout << "{ " << this->name << ", " << this->acceptingState << " }\n";
-		
-		// print children indented
-		for (const auto& it : this->relations) {
-			it.second->printDfs(depth+1);	
-		}
+
+	void addFinalState(int state) {
+		finalStates.insert(state);
+	}
+
+	bool runSimulation(const std::string& input) {
+		// TODO: tbf
+		return true;
 	}
 };
 
@@ -138,7 +122,7 @@ std::vector<std::string> infixToPostFixTranslation(std::vector<std::string> infi
 
 	std::vector<std::string> outputQueue;
 	std::vector<std::string> stack;
-
+	
 	for(const std::string& candidate : infix) {
 		std::vector<std::string>::iterator it = std::find(pushers.begin(), pushers.end(), candidate);
 		if(it != pushers.end()) {
@@ -182,14 +166,13 @@ std::vector<std::string> infixToPostFixTranslation(std::vector<std::string> infi
 std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {	
 	// all our primitive operators can be treated as binary so I will
 	// solve them the same way we do mathematical binary operators
-
 	// at this point we can only have primitive operators of Concatenation and Alternations
 	// infix to postfix took care of handling groupings
 
-	// root state
-
-	std::shared_ptr<Nfa> lastState = Nfa::createEpsilonNfa();
-	std::unordered_map<std::string, std::unique_ptr<Nfa> > stringToNode;
+	std::shared_ptr<Nfa> nfa = Nfa::createEpsilonNfa();
+	int lastState = 0;
+	
+	std::unordered_map<std::string, std::string> symbolMapping;
 
 	std::vector<std::string> stack;	
 	for (const std::string& primitiveCandidate : postFixed) {
@@ -197,28 +180,86 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 			// pop the last two
 			std::string x = stack.at(stack.size() - 1);
 			stack.pop_back();
-
+			
 			std::string y = stack.at(stack.size() - 1);
 			stack.pop_back();
 			
-			// create 2 separate nodes for the primitives, and concatenate them?
+			// make a fork connecting the alternator
+			int stateForX = nfa->stateCounter;
+			int stateforY = nfa->stateCounter+1;
+			
+			int stateForOnXMatch = nfa->stateCounter+2;
+			int stateForOnYMatch = nfa->stateCounter+3;
+			
+			int commonStatePostMerge = nfa->stateCounter+4;
+
+			nfa->addEpsilonTransition(lastState, stateForX);
+			// TODO: FIX ALL CALLS TO ADD TRANSITION, how to get a hold of the symbol
+			nfa->addTransition(stateForX, x, stateForOnXMatch);
+			
+			nfa->addEpsilonTransition(lastState, stateforY);
+			nfa->addTransition(stateforY, y, stateForOnYMatch);
+			
+			nfa->addEpsilonTransition(stateForOnXMatch, commonStatePostMerge);
+			nfa->addEpsilonTransition(stateForOnYMatch, commonStatePostMerge);
+
+			nfa->addEpsilonTransition(commonStatePostMerge, 1); // 1 is the final acceptance stage
+			nfa->stateCounter+=5;
+			
+			lastState = commonStatePostMerge;
+
 			std::string	alternated = "(" + x + ")|(" + y + ")";
 			
+
 			stack.push_back(alternated);
+			
 		} else if (primitiveCandidate == "+") {
 			// pop the last two
 			std::string x = stack.at(stack.size() - 1);
 			stack.pop_back();
-	
+			
 			std::string y = stack.at(stack.size() - 1);
 			stack.pop_back();
-				
+
+			// merge x and y and connect last state to x, then x to y, then make y last state
+			int stateForX = nfa->stateCounter;
+			int stateForY = nfa->stateCounter+1;
+			
+			// TODO
+			nfa->addTransition(lastState, x, stateForX);
+			nfa->addTransition(stateForX, y, stateForY);
+			nfa->addEpsilonTransition(stateForY, 1); // link to acceptance state
+			nfa->stateCounter+=2;
+			lastState = stateForY;
+
 			std::string	concatenated = "(" + x + ")+(" + y + ")";
+			
+
 			stack.push_back(concatenated);
 		} else if (primitiveCandidate == "*") {
 			// Kleene is a unary and is to be treated differently
 			std::string x = stack.at(stack.size() - 1);
 			stack.pop_back();
+			
+			int topOfForkState = nfa->stateCounter;
+			int bottomOfForkState = nfa->stateCounter+1;
+			int topOfForkNextState = nfa->stateCounter+2;
+			int onXMatchFork = nfa->stateCounter+3;
+			int loopOnXMatchFork = topOfForkNextState;
+
+			int pesudoAcceptanceState = nfa->stateCounter+4;
+			
+			nfa->addEpsilonTransition(lastState, pesudoAcceptanceState);
+
+			nfa->addEpsilonTransition(lastState, topOfForkNextState);
+			// TODO
+			nfa->addTransition(topOfForkNextState, x, onXMatchFork);
+			nfa->addEpsilonTransition(onXMatchFork, loopOnXMatchFork);
+			nfa->addEpsilonTransition(onXMatchFork, pesudoAcceptanceState);
+
+			nfa->addEpsilonTransition(pesudoAcceptanceState, 1); // 1 is the base most acceptance state
+			
+			nfa->stateCounter+=5;
 
 			std::string kleene = "(" + x + "*)";
 			stack.push_back(kleene);
@@ -229,7 +270,7 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 	
 	std::cout << stack.at(0) << std::endl;
 
-	return lastState;
+	return nfa;
 }
 
 
@@ -249,7 +290,6 @@ int main() {
 	
 	std::cout << "Completed Nfa: " << std::endl;
 
-	nfa->printDfs();
 
 	std::cout << "######## Evaluate against NFA #########" << std::endl;
 
