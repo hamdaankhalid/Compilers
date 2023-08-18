@@ -26,8 +26,29 @@
  * */
 
 /*
- * This class is a node, it can be appended to, and it can be pointed to by others
+ * Epsilon NFA Explanation Copy Pasta:
+ *
+ *An ε-NFA (epsilon-Nondeterministic Finite Automaton) is a type of finite automaton used in theoretical computer science and formal language theory to describe and recognize regular languages. It is an extension of a traditional NFA (Nondeterministic Finite Automaton) with the addition of epsilon transitions (also known as ε-transitions or lambda transitions).
+
+Let's break down the components and concepts of an ε-NFA in absolute detail:
+
+States: An ε-NFA consists of a finite set of states, often denoted by Q. Each state represents a specific condition or configuration of the automaton.
+
+Alphabet: There is a finite input alphabet Σ, which consists of symbols or characters that the automaton reads from an input string. These symbols are the basic building blocks of the language.
+
+Transitions: Unlike a traditional DFA (Deterministic Finite Automaton), an ε-NFA can have multiple transitions for a given state and input symbol. These transitions are non-deterministic, meaning that the automaton can move to multiple states at once when processing a particular symbol. Additionally, ε-NFAs can have epsilon transitions (ε-transitions), which are transitions that occur without consuming any input symbol. An ε-transition allows the automaton to move from one state to another without reading any input, effectively adding an extra dimension to its computation.
+
+Start State: There is a designated start state (often denoted as q0) where the automaton begins its computation.
+
+Accept States: The ε-NFA also has a set of accept states (or final states), which are states that, when reached after processing the entire input string, indicate that the automaton recognizes the input string as a valid member of the language.
+
+Epsilon Transitions: Epsilon transitions (ε-transitions) are transitions that are not associated with any input symbol. They are represented using the ε symbol. When the automaton encounters an ε-transition, it can move from the current state to the target state without consuming any input symbol. Epsilon transitions allow for non-determinism, as the automaton can make choices without needing any input cues.
+
+Language Recognition: To determine whether a given input string belongs to the language recognized by the ε-NFA, the automaton explores all possible paths through its states, considering both regular transitions (based on input symbols) and ε-transitions. It accepts the input string if there exists at least one path that leads to an accept state after processing the entire input.
+
+Equivalence to Regular Languages: ε-NFAs are capable of recognizing the same class of languages as DFAs and NFAs. This means that any language recognized by an ε-NFA can also be recognized by a regular NFA or DFA. Similarly, any language recognized by a regular NFA or DFA can be recognized by an ε-NFA.
  * */
+
 class Nfa {
 private:
 
