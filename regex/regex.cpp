@@ -4,14 +4,12 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 /*
  * Primitives:
- * - EMPTY
- * - DIGIT
- * - NUMBER
- * - 'literal'
+ * - For now if something is not an operator we treat it as a literal
  *
  * Concatenation:
  * - "+"
@@ -80,6 +78,25 @@ an ε-NFA can also be recognized by a regular NFA or DFA. Similarly, any languag
 recognized by a regular NFA or DFA can be recognized by an ε-NFA.
  * */
 
+char groupingAndRelations[5] = {'*', '|', '+', '(', ')'};
+
+bool isOperatorOrGroups(char a) {
+	for (int i  = 0; i < 5; i++) {
+		if (groupingAndRelations[i] == a) {
+			return true;
+		}
+	}
+	return false;
+}
+
+
+bool isOperatorOrGroups(const std::string& x) {
+	if (x.size() !=  1) {
+		return false;
+	}
+	return isOperatorOrGroups(x[0]);
+}
+
 class Nfa {
 private:
   std::unordered_set<int> finalStates;
@@ -89,15 +106,18 @@ private:
       transitions;
 
 public:
+  const int startState = 0;
+  const int endAcceptanceState = 1;
+
   int stateCounter = 0;
 
   static std::shared_ptr<Nfa> createEpsilonNfa() {
     std::shared_ptr<Nfa> base(new Nfa);
-    base->addEpsilonTransition(0, 1);
+    base->addEpsilonTransition(base->startState, base->endAcceptanceState);
 
-    base->stateCounter += 2;
+    base->stateCounter = 2; // 0 and 1 are already used
 
-    base->addFinalState(1);
+    base->addFinalState(base->endAcceptanceState);
 
     return base;
   }
@@ -110,6 +130,10 @@ public:
 
   void addEpsilonTransition(int fromState, int toState) {
     this->epsilonTransitions[fromState].insert(toState);
+  }
+
+  void removeEpsilonTransition(int fromState, int toState) {
+	this->epsilonTransitions[fromState].erase(toState);
   }
 
   void addFinalState(int state) { finalStates.insert(state); }
@@ -161,14 +185,10 @@ public:
 };
 
 std::vector<std::string> preProcessRegex(const std::string &regex) {
-  std::vector<char> groupingAndRelations =
-      std::vector<char>{'|', '+', '(', ')'};
   std::vector<std::string> splitted;
   std::string builder;
   for (char curr : regex) {
-    std::vector<char>::iterator it = std::find(
-        groupingAndRelations.begin(), groupingAndRelations.end(), curr);
-    if (it != groupingAndRelations.end()) {
+    if (isOperatorOrGroups(curr)) {
       if (!builder.empty()) {
         splitted.push_back(builder);
       }
@@ -236,22 +256,41 @@ infixToPostFixTranslation(std::vector<std::string> infix) {
   return outputQueue;
 }
 
-
-// Create an NFA and change its topology as we iterate through the regular expression
-// return the NFA back to the invoker. This Nfa now has all the states and transitions
-// needed to be able to match a pattern
+// Create an NFA and change its topology as we iterate through the regular
+// expression return the NFA back to the invoker. This Nfa now has all the
+// states and transitions needed to be able to match a pattern
 std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
   // all our primitive operators can be treated as binary so I will
-  // solve them the same way we do mathematical binary operators
-  // at this point we can only have primitive operators of Concatenation and
-  // Alternations infix to postfix took care of handling groupings
-
+  // solve them the same way we do mathematical binary operators at
+  // this point we can only have primitive operators of Concatenation
+  // and alternations infix to postfix took care of handling groupings
   std::shared_ptr<Nfa> nfa = Nfa::createEpsilonNfa();
-  int lastState = 0;
+  int lastStateStart = nfa->startState;
+  int lastStateEnd = nfa->endAcceptanceState; 
 
-  std::unordered_map<std::string, std::string> symbolMapping;
+  // each base alphabet in the language is given a start state and an end state, we will
+  // add these transitions into our nfa, and then connnect Epsilon transitions to them
+  std::unordered_map<std::string, std::pair<int, int> > symbolMapping;
+  for (const std::string& candidate : postFixed) {
+	  if (!isOperatorOrGroups(candidate)) {
+		int startState = nfa->stateCounter;
+		nfa->stateCounter++;
+		int endState = nfa->stateCounter;
+		nfa->stateCounter++;
+
+		std::pair<int, int> startEndStatePair = std::make_pair(startState, endState);
+
+		symbolMapping.insert(std::make_pair(
+			candidate, startEndStatePair
+		)); 
+		
+		nfa->addTransition(startState, candidate, endState);
+	  }
+  }
+
 
   std::vector<std::string> stack;
+
   for (const std::string &primitiveCandidate : postFixed) {
     if (primitiveCandidate == "|") {
       // pop the last two
@@ -262,34 +301,34 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
       stack.pop_back();
 
       // make a fork connecting the alternator
-      int stateForX = nfa->stateCounter;
-      int stateforY = nfa->stateCounter + 1;
+	  // x and y represent a state, this state is already in our symbol mapping
+	  std::pair<int, int> statesForMatchX = symbolMapping.at(x);
+	  std::pair<int, int> statesForMatchY = symbolMapping.at(y);
+	
+	  // when doing a fork we basically break the connection between the current start state and end state
+	  // then we add our fork in between
+	  int postForkCommonState = nfa->stateCounter;
+	  nfa->stateCounter++;
+	
+	  nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
+	
+	  nfa->addEpsilonTransition(lastStateStart, statesForMatchX.first);
+	  nfa->addEpsilonTransition(statesForMatchX.second, postForkCommonState);
 
-      int stateForOnXMatch = nfa->stateCounter + 2;
-      int stateForOnYMatch = nfa->stateCounter + 3;
+	  nfa->addEpsilonTransition(lastStateStart, statesForMatchY.first);
+	  nfa->addEpsilonTransition(statesForMatchY.second, postForkCommonState);
+		
+	  nfa->addEpsilonTransition(postForkCommonState, lastStateEnd);
 
-      int commonStatePostMerge = nfa->stateCounter + 4;
-
-      nfa->addEpsilonTransition(lastState, stateForX);
-      // TODO: FIX ALL CALLS TO ADD TRANSITION, how to get a hold of the symbol
-      nfa->addTransition(stateForX, x, stateForOnXMatch);
-
-      nfa->addEpsilonTransition(lastState, stateforY);
-      nfa->addTransition(stateforY, y, stateForOnYMatch);
-
-      nfa->addEpsilonTransition(stateForOnXMatch, commonStatePostMerge);
-      nfa->addEpsilonTransition(stateForOnYMatch, commonStatePostMerge);
-
-      nfa->addEpsilonTransition(commonStatePostMerge,
-                                1); // 1 is the final acceptance stage
-      nfa->stateCounter += 5;
-
-      lastState = commonStatePostMerge;
-
+	  lastStateStart = postForkCommonState;
+	
+	  // find the x and y states start and ends for both and then create an alternator
+	  // then take their combined start and end and store in the mapping
       std::string alternated = "(" + x + ")|(" + y + ")";
+		
+	  symbolMapping.insert(std::make_pair(alternated, std::make_pair(lastStateStart, lastStateEnd)));
 
       stack.push_back(alternated);
-
     } else if (primitiveCandidate == "+") {
       // pop the last two
       std::string x = stack.at(stack.size() - 1);
@@ -297,47 +336,37 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 
       std::string y = stack.at(stack.size() - 1);
       stack.pop_back();
+	  
+	  // x and y represent a state, this state is already in our symbol mapping
+	  std::pair<int, int> statesForMatchX = symbolMapping.at(x);
+	  std::pair<int, int> statesForMatchY = symbolMapping.at(y);
+		
+	  // we had a -> b
+	  // we are going to make it:
+	  // a -> x -> y -> b
+	  // so we need to break connection between a and b
+	  nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
+	  // add an epsilon transition betweeen them
+	  nfa->addEpsilonTransition(statesForMatchX.second, statesForMatchY.first);
+	  
+	  int newStatePostConcat = nfa->stateCounter;
+	  nfa->stateCounter++;
 
-      // merge x and y and connect last state to x, then x to y, then make y
-      // last state
-      int stateForX = nfa->stateCounter;
-      int stateForY = nfa->stateCounter + 1;
+	  nfa->addEpsilonTransition(statesForMatchY.second, newStatePostConcat);
+	  nfa->addEpsilonTransition(newStatePostConcat, lastStateEnd);
 
-      // TODO
-      nfa->addTransition(lastState, x, stateForX);
-      nfa->addTransition(stateForX, y, stateForY);
-      nfa->addEpsilonTransition(stateForY, 1); // link to acceptance state
-      nfa->stateCounter += 2;
-      lastState = stateForY;
+	  lastStateStart = newStatePostConcat;
 
       std::string concatenated = "(" + x + ")+(" + y + ")";
+	  symbolMapping.insert(std::make_pair(concatenated, std::make_pair(lastStateStart, lastStateEnd)));
 
       stack.push_back(concatenated);
     } else if (primitiveCandidate == "*") {
       // Kleene is a unary and is to be treated differently
       std::string x = stack.at(stack.size() - 1);
       stack.pop_back();
-
-      int topOfForkState = nfa->stateCounter;
-      int topOfForkNextState = nfa->stateCounter + 1;
-      int onXMatchFork = nfa->stateCounter + 2;
-      int loopOnXMatchFork = topOfForkNextState;
-
-      int pesudoAcceptanceState = nfa->stateCounter + 3;
-
-      nfa->addEpsilonTransition(lastState, pesudoAcceptanceState);
-
-      nfa->addEpsilonTransition(lastState, topOfForkState);
-
-      // TODO
-      nfa->addTransition(topOfForkNextState, x, onXMatchFork);
-      nfa->addEpsilonTransition(onXMatchFork, loopOnXMatchFork);
-      nfa->addEpsilonTransition(onXMatchFork, pesudoAcceptanceState);
-
-      nfa->addEpsilonTransition(pesudoAcceptanceState,
-                                1); // 1 is the base most acceptance state
-
-      nfa->stateCounter += 4;
+	  
+	  // TODO: FOLOWO ABOIVE PATTERN TO GET X and then write out epsilon transitions
 
       std::string kleene = "(" + x + "*)";
       stack.push_back(kleene);
@@ -355,7 +384,7 @@ int main() {
   std::cout << "############ REGULAR EXPRESSION PARSER & COMPILER #############"
             << std::endl;
 
-  std::string expr = "a+b*|a+(c|d)";
+  std::string expr = "a+b|a+(c|d)";
   std::cout << "INFIX Regex: " << expr << std::endl;
 
   std::cout << "######## COMPILE TO NFA ########" << std::endl;
