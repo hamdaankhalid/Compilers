@@ -128,6 +128,14 @@ public:
 	  return this->stateCounter-1;
   }
 
+  bool const isStateChainedAlready(int state) {
+	  std::unordered_map<int, std::unordered_set<int> >::iterator found = this->epsilonTransitions.find(state);
+	  if (found == this->epsilonTransitions.end()){
+		  return false;
+	  }
+	  return !this->epsilonTransitions.at(state).empty();
+  }
+
   void addTransition(int fromState, const std::string &symbol, int toState) {
     this->transitions[fromState][symbol].insert(toState);
   }
@@ -269,8 +277,9 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
   // this point we can only have primitive operators of Concatenation
   // and alternations infix to postfix took care of handling groupings
   const std::shared_ptr<Nfa> nfa = Nfa::createEpsilonNfa();
-  int lastStateStart = nfa->startState;
-  const int lastStateEnd = nfa->endAcceptanceState; 
+
+  const int lastStateStart = nfa->startState;
+  int lastStateEnd = nfa->endAcceptanceState; 
 
   // each base alphabet in the language is given a start state and an end state, we will
   // add these transitions into our nfa, and then connnect Epsilon transitions to them
@@ -285,14 +294,28 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 		symbolMapping.insert(std::make_pair(
 			candidate, startEndStatePair
 		)); 
-		
+		// these are the actual non epsilon transitions	
 		nfa->addTransition(startState, candidate, endState);
+		// when we iterate over our actual regex we will be adding these real transitions
+		// between the existing start and end state to create topologies that reflect the
+		// expressions and sub-expressions
 	  }
   }
 
   std::vector<std::string> stack;
 
   for (const std::string &primitiveCandidate : postFixed) {
+	// print stacks contents for debuggging
+	std::cout << "Stack Contents:" << std::endl;
+	for (const std::string &item : stack) { 
+		std::cout << item << ", ";
+	}
+	std::cout << "\n";
+	
+
+	std::cout << "State of NFA" << std::endl;
+	nfa->print();
+
     if (primitiveCandidate == "|") {
       // pop the last two
       std::string y = stack.at(stack.size() - 1);
@@ -308,31 +331,21 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 	
 	  // when doing a fork we basically break the connection between the current start state and end state
 	  // then we add our fork in between
+	  int preForkCommonState = nfa->createNewState();
 	  int postForkCommonState = nfa->createNewState();
-		
+
 	  // break connection
 	  nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
 	  
-	  // top branch of the fork
-	  nfa->addEpsilonTransition(lastStateStart, statesForMatchX.first);
-	  nfa->addEpsilonTransition(statesForMatchX.second, postForkCommonState);
-	  
-	  // bottom branch of the fork
-	  nfa->addEpsilonTransition(lastStateStart, statesForMatchY.first);
-	  nfa->addEpsilonTransition(statesForMatchY.second, postForkCommonState);
-	
-	  // connect the common to the previously disconnected end
-	  nfa->addEpsilonTransition(postForkCommonState, lastStateEnd);
-	  std::cout << postForkCommonState << ", " << lastStateEnd << std::endl;
 
-	  lastStateStart = postForkCommonState;
-	
 	  // find the x and y states start and ends for both and then create an alternator
 	  // then take their combined start and end and store in the mapping
       std::string alternated = "(" + x + ")|(" + y + ")";
 	  
 	  // add the state and metadata back into mappings
-	  symbolMapping.insert(std::make_pair(alternated, std::make_pair(lastStateStart, lastStateEnd)));
+	  symbolMapping.insert(std::make_pair(alternated, std::make_pair(postForkCommonState, newStatePreEnd)));
+
+// TODO:	  lastStateStart = postForkCommonState;
 
       stack.push_back(alternated);
     } else if (primitiveCandidate == "+") {
@@ -347,27 +360,32 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 	  std::pair<int, int> statesForMatchX = symbolMapping.at(x);
 	  std::pair<int, int> statesForMatchY = symbolMapping.at(y);
 		
-	  // we had a -> b
+	  // we need to keep the start constant and be actually moving the last end
 	  // we are going to make it:
-	  // currentStartState -> x -> y -> newStatePostConcat -> currentEnd
-	  // so we need to break connection between a and b
-	  nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
-
-	  // connect the current start to the the start of x
-	  nfa->addEpsilonTransition(lastStateStart, statesForMatchX.first);
-	
-	  // add an epsilon transition betweeen them
-	  nfa->addEpsilonTransition(statesForMatchX.second, statesForMatchY.first);
+	  // lastStateStart -> pseudoStartForConcatState -> x -> y ->pseudoEndStateForConcatState -> lastStateEnd -> the rest of the expression
 	  
-	  int newStatePostConcat = nfa->createNewState();
+	  std::cout << "Concatanating X and Y: " << statesForMatchX.first << ", " << statesForMatchX.second << " ; " << statesForMatchY.first << " , " << statesForMatchY.second << std::endl;
 
-	  nfa->addEpsilonTransition(statesForMatchY.second, newStatePostConcat);
-	  nfa->addEpsilonTransition(newStatePostConcat, lastStateEnd);
+	  std::cout << "Current lastStateStart " << lastStateStart << " and current lastStateEnd " << lastStateEnd << std::endl;
 
-	  lastStateStart = newStatePostConcat;
+	  // connect x and y
+	  nfa->addEpsilonTransition(statesForMatchX.second, statesForMatchY.first);
+
+	  // add them into the existing expr head (head because we are evaluating reverse polish
+	  nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
+	  nfa->addEpsilonTransition(lastStateStart, statesForMatchX.first);
+	  
+	  // check if last state is already connected in a terminating chain
+	  // if a node has an epsilon transition out of it means it was already connected
+	  if (!nfa->isStateChainedAlready(statesForMatchY.second)) {
+		nfa->addEpsilonTransition(statesForMatchY.second, lastStateEnd);
+	  }
 
       std::string concatenated = "(" + x + ")+(" + y + ")";
-	  symbolMapping.insert(std::make_pair(concatenated, std::make_pair(lastStateStart, lastStateEnd)));
+	  symbolMapping.insert(std::make_pair(concatenated, 
+				  std::make_pair(statesForMatchX.first, statesForMatchY.second)));
+
+	  lastStateEnd = statesForMatchX.first;
 
       stack.push_back(concatenated);
     } else if (primitiveCandidate == "*") {
@@ -387,23 +405,27 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 
   // if our answer is at the end do we need to add an epsilon for it?
   if (stack.size() != 0) {
-
-	// treat this like an extra Concatenation to last start
-	
  	std::string x = stack.at(0);
 	stack.pop_back();
 
 	std::pair<int, int> xState = symbolMapping.at(x);
 	
+	if (xState.first != lastStateEnd ) {
+		std::cout << "WARNING: This should only execute if there was only one item in the regular expression" << std::endl;
+		
+		assert(stack.size() == 0);
 	
-	if (xState.second != lastStateEnd && xState.first != lastStateStart) {
 		nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
-		nfa->addEpsilonTransition(lastStateStart, xState.first);
-		nfa->addEpsilonTransition(xState.second, lastStateEnd);
+	    nfa->addEpsilonTransition(lastStateStart, xState.first);
+		  
+	    // check if last state is already connected in a terminating chain
+	    // if a node has an epsilon transition out of it means it was already connected
+	    if (!nfa->isStateChainedAlready(xState.second)) {
+	    	nfa->addEpsilonTransition(xState.second, lastStateEnd);
+	    }
 	}
-	
 
-	lastStateStart = xState.second;
+	lastStateEnd = xState.first;
 
 	std::cout << "Verify postfix by checking converted version:" << std::endl;
 
@@ -419,7 +441,7 @@ int main() {
             << std::endl;
 
   // std::string expr = "a+b|a+(c|d)";
-  std::string expr = "a|b";
+  std::string expr = "a";
   std::cout << "INFIX Regex: " << expr << std::endl;
 
   std::cout << "######## COMPILE TO NFA ########" << std::endl;
