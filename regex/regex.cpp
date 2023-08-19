@@ -268,9 +268,9 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
   // solve them the same way we do mathematical binary operators at
   // this point we can only have primitive operators of Concatenation
   // and alternations infix to postfix took care of handling groupings
-  std::shared_ptr<Nfa> nfa = Nfa::createEpsilonNfa();
+  const std::shared_ptr<Nfa> nfa = Nfa::createEpsilonNfa();
   int lastStateStart = nfa->startState;
-  int lastStateEnd = nfa->endAcceptanceState; 
+  const int lastStateEnd = nfa->endAcceptanceState; 
 
   // each base alphabet in the language is given a start state and an end state, we will
   // add these transitions into our nfa, and then connnect Epsilon transitions to them
@@ -289,7 +289,6 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 		nfa->addTransition(startState, candidate, endState);
 	  }
   }
-
 
   std::vector<std::string> stack;
 
@@ -310,7 +309,7 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 	  // when doing a fork we basically break the connection between the current start state and end state
 	  // then we add our fork in between
 	  int postForkCommonState = nfa->createNewState();
-	  
+		
 	  // break connection
 	  nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
 	  
@@ -324,6 +323,7 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 	
 	  // connect the common to the previously disconnected end
 	  nfa->addEpsilonTransition(postForkCommonState, lastStateEnd);
+	  std::cout << postForkCommonState << ", " << lastStateEnd << std::endl;
 
 	  lastStateStart = postForkCommonState;
 	
@@ -387,20 +387,26 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 
   // if our answer is at the end do we need to add an epsilon for it?
   if (stack.size() != 0) {
+
 	// treat this like an extra Concatenation to last start
-	nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
-
-	std::string x = stack.at(0);
+	
+ 	std::string x = stack.at(0);
 	stack.pop_back();
-	
-	std::pair<int, int> xState = symbolMapping.at(x);
 
-	nfa->addEpsilonTransition(lastStateStart, xState.first);
-	nfa->addEpsilonTransition(xState.second, lastStateEnd);
+	std::pair<int, int> xState = symbolMapping.at(x);
 	
+	
+	if (xState.second != lastStateEnd && xState.first != lastStateStart) {
+		nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
+		nfa->addEpsilonTransition(lastStateStart, xState.first);
+		nfa->addEpsilonTransition(xState.second, lastStateEnd);
+	}
+	
+
 	lastStateStart = xState.second;
 
 	std::cout << "Verify postfix by checking converted version:" << std::endl;
+
 
 	std::cout << x << std::endl;
   }
