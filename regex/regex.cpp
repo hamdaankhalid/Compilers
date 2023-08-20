@@ -375,16 +375,14 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 
 	  nfa->addEpsilonTransition(statesForMatchX.second, postForkCommonState);
 	  nfa->addEpsilonTransition(statesForMatchY.second, postForkCommonState);
-	
+
+	  if (!nfa->isStateChainedAlready(postForkCommonState)) {
+		nfa->addEpsilonTransition(postForkCommonState, lastStateEnd);
+	  }
+
 	  // add the alternator into the nfa
       nfa->addEpsilonTransition(lastStateStart, preForkCommonState);
-	  
-	  // this fucker needs to be fixed
-	  // std::cout << "DEBUG " << postForkCommonState << ", " << lastStateEnd << std::endl;
-	  
-	  if (!nfa->isStateChainedAlready(postForkCommonState)){
-	    nfa->addEpsilonTransition(postForkCommonState, lastStateEnd);
-	  }
+	   
 	  // find the x and y states start and ends for both and then create an alternator
 	  // then take their combined start and end and store in the mapping
       std::string alternated = "(" + x + ")|(" + y + ")";
@@ -440,15 +438,43 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
       std::string x = stack.at(stack.size() - 1);
       stack.pop_back();
 	  
-	  // TODO: FOLLOW ABOIVE PATTERN TO GET X and then write out epsilon transitions
-	  assert(false); // SHOULD NEVER EXECUTE
+	  std::pair<int, int> statesForMatchX = symbolMapping.at(x);
+	  
+	  // break connection
+	  nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
+
+	  // construct a kleene then add it into the nfa
+	  int preForkCommonState = nfa->createNewState();	
+	  int pseudoEnd = nfa->createNewState();
+
+	  // transfer everything in second to pseudoEnd
+	  if (nfa->hasEpsilonTransitions(statesForMatchX.second)) {
+	    nfa->transferEpsilonTransitions(statesForMatchX.second, pseudoEnd);
+	  }
+
+	  nfa->addEpsilonTransition(statesForMatchX.second, pseudoEnd);
+
+	  // loop back on the kleene
+	  nfa->addEpsilonTransition(statesForMatchX.second, statesForMatchX.first);
+	  nfa->addEpsilonTransition(preForkCommonState, pseudoEnd);
+	  nfa->addEpsilonTransition(preForkCommonState, statesForMatchX.first);
+
+	  nfa->addEpsilonTransition(lastStateStart, preForkCommonState);
+	  if (!nfa->isStateChainedAlready(pseudoEnd)) {
+		nfa->addEpsilonTransition(pseudoEnd, lastStateEnd);
+	  }
 
       std::string kleene = "(" + x + "*)";
+
+	  symbolMapping.insert(std::make_pair(kleene, 
+				  std::make_pair(preForkCommonState, pseudoEnd)));
+
       stack.push_back(kleene);
+	  
+	  lastStateEnd = preForkCommonState;
     } else {
       stack.push_back(primitiveCandidate);
     }
-
 
 	std::cout << "State of NFA" << std::endl;
 	nfa->print();
@@ -482,7 +508,6 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 
 	std::cout << "Verify postfix by checking converted version:" << std::endl;
 
-
 	std::cout << x << std::endl;
   }
 
@@ -494,7 +519,7 @@ int main() {
             << std::endl;
 
   // std::string expr = "a+b|a+(c|d)";
-  std::string expr = "(a+b)|c";
+  std::string expr = "(a|b)*";
   std::cout << "INFIX Regex: " << expr << std::endl;
 
   std::cout << "######## COMPILE TO NFA ########" << std::endl;
