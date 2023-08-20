@@ -128,7 +128,7 @@ public:
 	  return this->stateCounter-1;
   }
 
-  bool const isStateChainedAlready(int state) {
+  bool isStateChainedAlready(int state) {
 	  std::unordered_map<int, std::unordered_set<int> >::iterator found = this->epsilonTransitions.find(state);
 	  if (found == this->epsilonTransitions.end()){
 		  return false;
@@ -143,8 +143,33 @@ public:
   void addEpsilonTransition(int fromState, int toState) {
     this->epsilonTransitions[fromState].insert(toState);
   }
+  
+  bool hasEpsilonTransitions(int state) {
+	  std::unordered_map<int, std::unordered_set<int> >::iterator found = this->epsilonTransitions.find(state);
+	  if (found == this->epsilonTransitions.end()) {
+	    return false;	
+	  }
 
-  void removeEpsilonTransition(int fromState, int toState) {
+	  return !this->epsilonTransitions[state].empty();
+  }
+
+  void transferEpsilonTransitions(int owner, int transferTo) {
+	  std::unordered_map<int, std::unordered_set<int> >::iterator found = this->epsilonTransitions.find(owner);
+	  if (found == this->epsilonTransitions.end()) {
+		std::cout << "nothing transfered" << std::endl;
+	    return;	
+	  }
+	  std::unordered_set<int> epsilons = this->epsilonTransitions[owner]; 
+	  this->epsilonTransitions[transferTo] = epsilons;
+	  this->epsilonTransitions[owner] = std::unordered_set<int>();
+  }
+
+  void removeEpsilonTransition(int fromState, int toState) {	
+	std::unordered_map<int, std::unordered_set<int> >::iterator found = this->epsilonTransitions.find(fromState);
+	if (found == this->epsilonTransitions.end()){
+		return;
+	}
+	
 	this->epsilonTransitions[fromState].erase(toState);
   }
 
@@ -312,10 +337,6 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 	}
 	std::cout << "\n";
 	
-
-	std::cout << "State of NFA" << std::endl;
-	nfa->print();
-
     if (primitiveCandidate == "|") {
       // pop the last two
       std::string y = stack.at(stack.size() - 1);
@@ -337,15 +358,41 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 	  // break connection
 	  nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
 	  
+	  // create the alternator
+	  nfa->addEpsilonTransition(preForkCommonState, statesForMatchX.first); 
+	  nfa->addEpsilonTransition(preForkCommonState, statesForMatchY.first); 
 
+	  // if has epsilon transitions
+	  if (nfa->hasEpsilonTransitions(statesForMatchX.second)) {
+		std::cout << "Attempt transfer from " << statesForMatchX.second << " to " << postForkCommonState << std::endl;
+	    nfa->transferEpsilonTransitions(statesForMatchX.second, postForkCommonState);
+	  }
+
+	  if (nfa->hasEpsilonTransitions(statesForMatchY.second)) {
+		std::cout << "Attempt transfer from " << statesForMatchY.second << " to " << postForkCommonState << std::endl;
+	    nfa->transferEpsilonTransitions(statesForMatchY.second, postForkCommonState);
+	  }
+
+	  nfa->addEpsilonTransition(statesForMatchX.second, postForkCommonState);
+	  nfa->addEpsilonTransition(statesForMatchY.second, postForkCommonState);
+	
+	  // add the alternator into the nfa
+      nfa->addEpsilonTransition(lastStateStart, preForkCommonState);
+	  
+	  // this fucker needs to be fixed
+	  // std::cout << "DEBUG " << postForkCommonState << ", " << lastStateEnd << std::endl;
+	  
+	  if (!nfa->isStateChainedAlready(postForkCommonState)){
+	    nfa->addEpsilonTransition(postForkCommonState, lastStateEnd);
+	  }
 	  // find the x and y states start and ends for both and then create an alternator
 	  // then take their combined start and end and store in the mapping
       std::string alternated = "(" + x + ")|(" + y + ")";
-	  
-	  // add the state and metadata back into mappings
-	  symbolMapping.insert(std::make_pair(alternated, std::make_pair(postForkCommonState, newStatePreEnd)));
 
-// TODO:	  lastStateStart = postForkCommonState;
+	  // add the state and metadata back into mappings
+	  symbolMapping.insert(std::make_pair(alternated, std::make_pair(preForkCommonState, postForkCommonState)));
+
+	  lastStateEnd = preForkCommonState;
 
       stack.push_back(alternated);
     } else if (primitiveCandidate == "+") {
@@ -393,7 +440,7 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
       std::string x = stack.at(stack.size() - 1);
       stack.pop_back();
 	  
-	  // TODO: FOLOWO ABOIVE PATTERN TO GET X and then write out epsilon transitions
+	  // TODO: FOLLOW ABOIVE PATTERN TO GET X and then write out epsilon transitions
 	  assert(false); // SHOULD NEVER EXECUTE
 
       std::string kleene = "(" + x + "*)";
@@ -401,6 +448,12 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
     } else {
       stack.push_back(primitiveCandidate);
     }
+
+
+	std::cout << "State of NFA" << std::endl;
+	nfa->print();
+
+	std::cout << "last state start first " << lastStateStart << ", last state end " << lastStateEnd << std::endl;
   }
 
   // if our answer is at the end do we need to add an epsilon for it?
@@ -441,7 +494,7 @@ int main() {
             << std::endl;
 
   // std::string expr = "a+b|a+(c|d)";
-  std::string expr = "a";
+  std::string expr = "(a+b)|c";
   std::cout << "INFIX Regex: " << expr << std::endl;
 
   std::cout << "######## COMPILE TO NFA ########" << std::endl;
