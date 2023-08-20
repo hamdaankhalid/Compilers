@@ -175,6 +175,12 @@ public:
 
   void addFinalState(int state) { finalStates.insert(state); }
 
+  /*
+   * Given an input string iterate over each character
+   * for each character we are going to explore a next path
+   * if there are any explorations that result in an accepted state
+   * we return true, otherwise false.
+   */
   bool runSimulation(const std::string &input) {
     // TODO: tbf
     return true;
@@ -512,6 +518,10 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
   }
 
   return nfa;
+}
+
+void test(const std::string& regex, std::vector<std::string> matches, std::vector<std::string> notMatches) {
+
 }
 
 int main() {
