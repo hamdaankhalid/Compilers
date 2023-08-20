@@ -181,9 +181,65 @@ public:
    * if there are any explorations that result in an accepted state
    * we return true, otherwise false.
    */
+  // TODO: infinite loop stop
   bool runSimulation(const std::string &input) {
-    // TODO: tbf
-    return true;
+	  int hardLimitSelfLoop = 100;
+	  std::unordered_map<int, int> selfLoopTransitions;
+
+	  int transitionEndsAt = input.size(); 
+
+	  // stack stores the current state and the current character index being explored
+	  std::vector<std::pair<int, char> > stack;
+	  // add the intial state onto the stack
+	  std::pair<int, int> initial = std::make_pair(this->startState, 0);
+	  stack.push_back(initial);
+
+	  while(!stack.empty()) {
+		std::pair<int, int> candidate = stack[0];
+		stack.pop_back();	
+		
+	    std::cout << "Candidate " << candidate.first << ", " << candidate.second << std::endl;
+		if (candidate.second == transitionEndsAt && candidate.first == this->endAcceptanceState) {
+			return true;
+		}
+
+		if (candidate.second == transitionEndsAt && candidate.first!= this->endAcceptanceState) {
+			return false;
+		}
+		
+		
+		// epsilon transitions
+		std::unordered_map<int, std::unordered_set<int> >::iterator found = this->epsilonTransitions.find(candidate.first);
+		if (found != this->epsilonTransitions.end()) {
+			std::unordered_set<int> epsilonTransitions = this->epsilonTransitions[candidate.first];
+			for (int nextState : epsilonTransitions) {
+				std::pair<int, int> toExplore = std::make_pair(nextState, candidate.second);
+				stack.push_back(toExplore);
+			}
+		}
+
+		// action based transitions
+		std::unordered_map<int, std::unordered_map<std::string, std::unordered_set<int> > >::iterator foundTransitionAbleState = this->transitions.find(candidate.first);
+		if (foundTransitionAbleState != this->transitions.end()) {
+			std::unordered_map<std::string, std::unordered_set<int> > actionTransitions = this->transitions[candidate.first];
+			
+			std::string symbol = std::string(1, input.at(candidate.second));
+			std::unordered_map<std::string, std::unordered_set<int> >::iterator foundSymbol = actionTransitions.find(symbol);
+
+			if (foundSymbol != actionTransitions.end()) {
+				std::unordered_set<int> nextStates = actionTransitions[symbol];	
+				int nextIdx = candidate.second+1;
+				for (int nextState : nextStates) {
+					std::pair<int, int> exploration = std::make_pair(nextState, nextIdx);
+					stack.push_back(exploration);
+				}
+			}
+		}
+		
+		// push them onto the stack
+	  }
+
+	  return false;
   }
 
   void print() {
@@ -414,16 +470,21 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 	  // we need to keep the start constant and be actually moving the last end
 	  // we are going to make it:
 	  // lastStateStart -> pseudoStartForConcatState -> x -> y ->pseudoEndStateForConcatState -> lastStateEnd -> the rest of the expression
-	  
-	  std::cout << "Concatanating X and Y: " << statesForMatchX.first << ", " << statesForMatchX.second << " ; " << statesForMatchY.first << " , " << statesForMatchY.second << std::endl;
+	  nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
+
+	  std::cout << "Concatenating X and Y: " << statesForMatchX.first << ", " << statesForMatchX.second << " ; " << statesForMatchY.first << " , " << statesForMatchY.second << std::endl;
 
 	  std::cout << "Current lastStateStart " << lastStateStart << " and current lastStateEnd " << lastStateEnd << std::endl;
 
 	  // connect x and y
 	  nfa->addEpsilonTransition(statesForMatchX.second, statesForMatchY.first);
+	  
+	  // TODO: work on transfer when connecting shit
+	  if (nfa->isStateChainedAlready(statesForMatchX.second)) {
+		nfa->transferEpsilonTransitions(statesForMatchX.second, statesForMatchY.first);
+	  }
 
 	  // add them into the existing expr head (head because we are evaluating reverse polish
-	  nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
 	  nfa->addEpsilonTransition(lastStateStart, statesForMatchX.first);
 	  
 	  // check if last state is already connected in a terminating chain
@@ -529,7 +590,7 @@ int main() {
             << std::endl;
 
   // std::string expr = "a+b|a+(c|d)";
-  std::string expr = "(a|b)*";
+  std::string expr = "(a+b)+c";
   std::cout << "INFIX Regex: " << expr << std::endl;
 
   std::cout << "######## COMPILE TO NFA ########" << std::endl;
@@ -545,5 +606,15 @@ int main() {
 
   std::cout << "######## Evaluate against NFA #########" << std::endl;
 
-  std::cout << "la la lala" << std::endl;
+  bool result = nfa->runSimulation("a");
+  std::cout<< result << std::endl;
+
+  result = nfa->runSimulation("ab");
+  std::cout<< result << std::endl;
+
+  result = nfa->runSimulation("bc");
+  std::cout<< result << std::endl;
+
+  result = nfa->runSimulation("abc");
+  std::cout<< result << std::endl;
 }
