@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -129,15 +130,6 @@ public:
     return this->stateCounter - 1;
   }
 
-  bool isStateChainedAlready(int state) {
-    std::unordered_map<int, std::unordered_set<int>>::iterator found =
-        this->epsilonTransitions.find(state);
-    if (found == this->epsilonTransitions.end()) {
-      return false;
-    }
-    return !this->epsilonTransitions.at(state).empty();
-  }
-
   void addTransition(int fromState, const std::string &symbol, int toState) {
     this->transitions[fromState][symbol].insert(toState);
   }
@@ -195,13 +187,13 @@ public:
 
     // stack stores the current state and the current character index being
     // explored
-    std::vector<std::pair<int, int> > stack;
+    std::vector<std::pair<int, int>> stack;
     // add the intial state onto the stack
     std::pair<int, int> initial = std::make_pair(this->startState, 0);
     stack.push_back(initial);
 
     while (!stack.empty()) {
-      std::pair<int, int> candidate = stack[stack.size()-1];
+      std::pair<int, int> candidate = stack[stack.size() - 1];
       stack.pop_back();
 
       if (candidate.second == transitionEndsAt &&
@@ -210,7 +202,7 @@ public:
       }
 
       // epsilon transitions
-      std::unordered_map<int, std::unordered_set<int> >::iterator found =
+      std::unordered_map<int, std::unordered_set<int>>::iterator found =
           this->epsilonTransitions.find(candidate.first);
       if (found != this->epsilonTransitions.end()) {
         std::unordered_set<int> epsilonTransitions =
@@ -218,17 +210,19 @@ public:
         for (int nextState : epsilonTransitions) {
           std::pair<int, int> toExplore =
               std::make_pair(nextState, candidate.second);
-		  // TODO: Check if already looped before and if at max limit
-		  std::unordered_map<int, int>::iterator loopedBefore = selfLoopTransitions.find(nextState);
-		  if (loopedBefore != selfLoopTransitions.end() && selfLoopTransitions[nextState] > hardLimitSelfLoop) {
-			  continue;
-		  }
+          // TODO: Check if already looped before and if at max limit
+          std::unordered_map<int, int>::iterator loopedBefore =
+              selfLoopTransitions.find(nextState);
+          if (loopedBefore != selfLoopTransitions.end() &&
+              selfLoopTransitions[nextState] > hardLimitSelfLoop) {
+            continue;
+          }
 
-		  if (loopedBefore != selfLoopTransitions.end()) {
-			  selfLoopTransitions[nextState] += 1;
-		  } else {
-			  selfLoopTransitions[nextState] = 1;
-		  }
+          if (loopedBefore != selfLoopTransitions.end()) {
+            selfLoopTransitions[nextState] += 1;
+          } else {
+            selfLoopTransitions[nextState] = 1;
+          }
 
           stack.push_back(toExplore);
         }
@@ -239,19 +233,19 @@ public:
       if (candidate.second == transitionEndsAt) {
         continue;
       }
-	  
+
       // action based transitions
       std::unordered_map<
           int,
-          std::unordered_map<std::string, std::unordered_set<int> > >::iterator
+          std::unordered_map<std::string, std::unordered_set<int>>>::iterator
           foundTransitionAbleState = this->transitions.find(candidate.first);
       if (foundTransitionAbleState != this->transitions.end()) {
-        std::unordered_map<std::string, std::unordered_set<int> >
+        std::unordered_map<std::string, std::unordered_set<int>>
             actionTransitions = this->transitions[candidate.first];
 
         std::string symbol = std::string(1, input.at(candidate.second));
 
-        std::unordered_map<std::string, std::unordered_set<int> >::iterator
+        std::unordered_map<std::string, std::unordered_set<int>>::iterator
             foundSymbol = actionTransitions.find(symbol);
 
         if (foundSymbol != actionTransitions.end()) {
@@ -329,6 +323,14 @@ std::vector<std::string> preProcessRegex(const std::string &regex) {
   if (!builder.empty()) {
     splitted.push_back(builder);
   }
+
+  int uniqueness = 0;
+  for (std::string &section : splitted) {
+    if (!isOperatorOrGroups(section)) {
+      section += "_" + std::to_string(uniqueness);
+      uniqueness++;
+    }
+  }
   return splitted;
 }
 
@@ -396,6 +398,7 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
   int lastStateEnd = nfa->endAcceptanceState;
 
   std::unordered_map<std::string, std::pair<int, int>> symbolMapping;
+  int i = 0;
   for (const std::string &candidate : postFixed) {
     if (!isOperatorOrGroups(candidate)) {
       int startState = nfa->createNewState();
@@ -403,13 +406,18 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 
       std::pair<int, int> startEndStatePair =
           std::make_pair(startState, endState);
-
+      // remove the issue of having a candidate get demolished by the index of
+      // duplicates
+      std::string uniqueCandidate = candidate + std::to_string(i);
       symbolMapping.insert(std::make_pair(candidate, startEndStatePair));
       // these are the actual non epsilon transitions
-      nfa->addTransition(startState, candidate, endState);
+      // in the actual transition remove the uniqueness postfix
+      std::string postFixedRemoved = candidate.substr(0, 1);
+      nfa->addTransition(startState, postFixedRemoved, endState);
       // when we iterate over our actual regex we will be adding these real
       // transitions between the existing start and end state to create
       // topologies that reflect the expressions and sub-expressions
+      i++;
     }
   }
 
@@ -438,19 +446,20 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
       nfa->addEpsilonTransition(preForkCommonState, statesForMatchX.first);
       nfa->addEpsilonTransition(preForkCommonState, statesForMatchY.first);
 
-      // if has epsilon transitions
       if (nfa->hasEpsilonTransitions(statesForMatchX.second)) {
         std::cout << "Attempt transfer from " << statesForMatchX.second
                   << " to " << postForkCommonState << std::endl;
         nfa->transferEpsilonTransitions(statesForMatchX.second,
                                         postForkCommonState);
       }
-	
-	  // when we do a concat, and then another concat and then do an alternator the concats are sequenced.... this aint good
+
+      // when we do a concat, and then another concat and then do an alternator
+      // the concats are sequenced.... this aint good
       if (nfa->hasEpsilonTransitions(statesForMatchY.second)) {
         std::cout << "Attempt transfer from " << statesForMatchY.second
                   << " to " << postForkCommonState << std::endl;
-		nfa->transferEpsilonTransitions(statesForMatchY.second, postForkCommonState);
+        nfa->transferEpsilonTransitions(statesForMatchY.second,
+                                        postForkCommonState);
       }
 
       nfa->addEpsilonTransition(statesForMatchX.second, postForkCommonState);
@@ -478,7 +487,7 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
       std::pair<int, int> statesForMatchX = symbolMapping.at(x);
       std::pair<int, int> statesForMatchY = symbolMapping.at(y);
 
-      if (nfa->isStateChainedAlready(statesForMatchX.second)) {
+      if (nfa->hasEpsilonTransitions(statesForMatchX.second)) {
         nfa->transferEpsilonTransitions(statesForMatchX.second,
                                         statesForMatchY.second);
       }
@@ -527,28 +536,24 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 
     std::cout << "State of NFA" << std::endl;
     nfa->print();
-
   }
 
   // connect everything in stack as concat on main NFA
   if (stack.size() > 0) {
-	std::cout << "Concatenating Remaining Sub-Automatas" << std::endl;
-	while (!stack.empty()) {
-		std::string x = stack.at(stack.size() - 1);
-		stack.pop_back();
+    std::cout << "Concatenating Remaining Sub-Automatas" << std::endl;
+    while (!stack.empty()) {
+      std::string x = stack.at(stack.size() - 1);
+      stack.pop_back();
 
-		std::pair<int, int> xState = symbolMapping.at(x);
+      std::pair<int, int> xState = symbolMapping.at(x);
 
-		nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
+      nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
 
-		nfa->addEpsilonTransition(lastStateStart, xState.first);
+      nfa->addEpsilonTransition(lastStateStart, xState.first);
 
-		// check if last state is already connected in a terminating chain
-		// if a node has an epsilon transition out of it means it was already
-		// connected
-		nfa->addEpsilonTransition(xState.second, lastStateEnd);
+      nfa->addEpsilonTransition(xState.second, lastStateEnd);
 
-		lastStateEnd = xState.first;
+      lastStateEnd = xState.first;
     }
   }
 
@@ -566,7 +571,8 @@ void test(const std::string &regex, std::vector<std::string> matches,
 
   std::shared_ptr<Nfa> nfa = buildNfa(postFixed);
 
-  std::cout << "######## Completed Nfa: for " << regex << " #########" << std::endl;
+  std::cout << "######## Completed Nfa: for " << regex << " #########"
+            << std::endl;
 
   nfa->print();
 
@@ -574,18 +580,20 @@ void test(const std::string &regex, std::vector<std::string> matches,
 
   for (const std::string &trues : matches) {
     bool mustBeTrue = nfa->runSimulation(trues);
-	if (!mustBeTrue) {
-		std::cout << "Test case " << trues << " FAILED against Regex " << regex << std::endl;
-		assert(false);
-	}
+    if (!mustBeTrue) {
+      std::cout << "Test case " << trues << " FAILED against Regex " << regex
+                << std::endl;
+      assert(false);
+    }
   }
 
   for (const std::string &falses : notMatches) {
     bool mustBeFalse = nfa->runSimulation(falses);
-	if (mustBeFalse) {
-		std::cout << "Test case " << falses << " FAILED against Regex " << regex << std::endl;
-		assert(false);
-	}
+    if (mustBeFalse) {
+      std::cout << "Test case " << falses << " FAILED against Regex " << regex
+                << std::endl;
+      assert(false);
+    }
   }
 
   std::cout << "-------- Test Passes ---------" << std::endl;
@@ -620,24 +628,22 @@ int main() {
 
   // quad concat
   std::string quadConcatenationRegex = "a+b+c+d";
-  std::vector<std::string> quadConcatenationFalses = {"", "a",  "b",   "c",  "ab",
-                                                  "ac", "acb", "cba", "acbd", "abc"};
+  std::vector<std::string> quadConcatenationFalses = {
+      "", "a", "b", "c", "ab", "ac", "acb", "cba", "acbd", "abc"};
   std::vector<std::string> quadConcatenationTrues = {"abcd"};
 
   test(quadConcatenationRegex, quadConcatenationTrues, quadConcatenationFalses);
 
   // binary alternator
   std::string binaryAlternatorRegex = "a|b";
-  std::vector<std::string> binaryAlternatorFalses = {"", "c",  "ab",
-                                                  "ac"};
+  std::vector<std::string> binaryAlternatorFalses = {"", "c", "ab", "ac"};
   std::vector<std::string> binaryAlternatorTrues = {"a", "b"};
 
   test(binaryAlternatorRegex, binaryAlternatorTrues, binaryAlternatorFalses);
 
   // quad alternator
   std::string quadAlternatorRegex = "a|b|c|d";
-  std::vector<std::string> quadAlternatorFalses = {"", "f",  "ab",
-                                                  "ac"};
+  std::vector<std::string> quadAlternatorFalses = {"", "f", "ab", "ac"};
 
   std::vector<std::string> quadAlternatorTrues = {"a", "b", "c", "d"};
 
@@ -645,68 +651,92 @@ int main() {
 
   // alternator and concatenation combos
   std::string altConCombo1Regex = "(a+b)|(c+d)";
-  std::vector<std::string> altConCombo1Falses = {"", "a", "b", "c", "d", "ac", "ad", "dca"};
+  std::vector<std::string> altConCombo1Falses = {"",  "a",  "b",  "c",
+                                                 "d", "ac", "ad", "dca"};
   std::vector<std::string> altConCombo1Trues = {}; // {"ab", "cd"};
 
   test(altConCombo1Regex, altConCombo1Trues, altConCombo1Falses);
 
   std::string altConCombo2Regex = "(a+b)|c";
-  std::vector<std::string> altConCombo2Falses = { "a" "ac", " ", "" };
-  std::vector<std::string> altConCombo2Trues { "ab", "c" };
-  
+  std::vector<std::string> altConCombo2Falses = {"a"
+                                                 "ac",
+                                                 " ", ""};
+  std::vector<std::string> altConCombo2Trues{"ab", "c"};
+
   test(altConCombo2Regex, altConCombo2Trues, altConCombo2Falses);
 
   std::string altConCombo3Regex = "a+(b|c)+d";
-  std::vector<std::string> altConCombo3Falses = { "", "a", "ab", "ac", "ad", "abe", "ace" };
-  std::vector<std::string> altConCombo3Trues { "abd", "acd" };
+  std::vector<std::string> altConCombo3Falses = {"",   "a",   "ab", "ac",
+                                                 "ad", "abe", "ace"};
+  std::vector<std::string> altConCombo3Trues{"abd", "acd"};
 
   test(altConCombo3Regex, altConCombo3Trues, altConCombo3Falses);
 
   // kleene
   std::string simpleKleene = "a*";
-  std::vector<std::string> simpleKleeneFalses = { "b", "gdfsd" };
-  std::vector<std::string> simpleKleeneTrues = {"", "a", "aa" , "aaaaaaaaaaaaaaa"};
+  std::vector<std::string> simpleKleeneFalses = {"b", "gdfsd"};
+  std::vector<std::string> simpleKleeneTrues = {"", "a", "aa",
+                                                "aaaaaaaaaaaaaaa"};
 
   test(simpleKleene, simpleKleeneTrues, simpleKleeneFalses);
 
   // concatenate kleene combo
   std::string concatKleeneCombo1Regex = "(c+d)*";
-  std::vector<std::string> concatKleeneCombo1Falses = { "a", "bc" "de", "d" };
-  std::vector<std::string> concatKleeneCombo1Trues = { "", "cd", "cdcdcd" };
+  std::vector<std::string> concatKleeneCombo1Falses = {"a",
+                                                       "bc"
+                                                       "de",
+                                                       "d"};
+  std::vector<std::string> concatKleeneCombo1Trues = {"", "cd", "cdcdcd"};
 
-  test(concatKleeneCombo1Regex, concatKleeneCombo1Trues, concatKleeneCombo1Falses);
+  test(concatKleeneCombo1Regex, concatKleeneCombo1Trues,
+       concatKleeneCombo1Falses);
 
   std::string concatKleeneCombo2Regex = "c+(o)*";
-  std::vector<std::string> concatKleeneCombo2Falses = { "cool", "a", "dog", ""};
-  std::vector<std::string> concatKleeneCombo2Trues = { "c", "co", "coooooo" };
+  std::vector<std::string> concatKleeneCombo2Falses = {"cool", "a", "dog", ""};
+  std::vector<std::string> concatKleeneCombo2Trues = {"c", "co", "coooooo"};
 
-  test(concatKleeneCombo2Regex, concatKleeneCombo2Trues, concatKleeneCombo2Falses);
+  test(concatKleeneCombo2Regex, concatKleeneCombo2Trues,
+       concatKleeneCombo2Falses);
 
   // alternator kleene combo
   std::string altKleeneCombo1 = "(c|o)*";
-  std::vector<std::string> altKleeneCombo1Falses = { "a", "aa" };
-  std::vector<std::string> altKleeneCombo1Trues = { "", "cc", "oo", "coco", "coocoo", "cooo", "ooooc" };
+  std::vector<std::string> altKleeneCombo1Falses = {"a", "aa"};
+  std::vector<std::string> altKleeneCombo1Trues = {
+      "", "cc", "oo", "coco", "coocoo", "cooo", "ooooc"};
 
   test(altKleeneCombo1, altKleeneCombo1Trues, altKleeneCombo1Falses);
 
   // alternator concat kleen combo
   std::string allCombo = "d+(a*)";
-  std::vector<std::string> allComboFalses = { "", "do", "dao", "a" };
-  std::vector<std::string> allComboTrues = { "d", "da", "daaa" };
-  
+  std::vector<std::string> allComboFalses = {"", "do", "dao", "a"};
+  std::vector<std::string> allComboTrues = {"d", "da", "daaa"};
+
   test(allCombo, allComboTrues, allComboFalses);
 
-
   std::string allCombo2 = "d+(a*)+(n|o)+i";
-  std::vector<std::string> allCombo2Falses = { "", "dock", "day", "a" "daaa", "da", "d", "dano", "dno"};
-  std::vector<std::string> allCombo2Trues = { "dni", "dani", "daaani", "daoi", "doi"};
-  
+  std::vector<std::string> allCombo2Falses = {"",
+                                              "dock",
+                                              "day",
+                                              "a"
+                                              "daaa",
+                                              "da",
+                                              "d",
+                                              "dano",
+                                              "dno"};
+  std::vector<std::string> allCombo2Trues = {"dni", "dani", "daaani", "daoi",
+                                             "doi"};
+
   test(allCombo2, allCombo2Trues, allCombo2Falses);
 
   // all pattern mega regex
-  std::string finalTestRegex = "k+h+a+l+i+d+.+h+a+m+d+(a*)+n+@+((g+m+a+i+l)|(m+i+c+r+o+s+o+f+t))+.+c+o+m";
-  std::vector<std::string> finalTestRegexFalses = { "khalid.hamdaan@yahoo.com", "khalid.ham" };
-  std::vector<std::string> finalTestRegexTrues = { "khalid.hamdaan@gmail.com", "khalid.hamdaan@microsoft.com", "khalid.hamdn@gmail.com", "khalid.hamdn@microsoft.com", "khalid.hamdaaaaaaaaaaaaaaaaaaaan@gmail.com" };
+  std::string finalTestRegex = "k+h+a+l+i+d+.+h+a+m+d+(a*)+n+@+((g+m+a+i+l)|(m+"
+                               "i+c+r+o+s+o+f+t))+.+c+o+m";
+  std::vector<std::string> finalTestRegexFalses = {"khalid.hamdaan@yahoo.com",
+                                                   "khalid.ham"};
+  std::vector<std::string> finalTestRegexTrues = {
+      "khalid.hamdaan@gmail.com", "khalid.hamdaan@microsoft.com",
+      "khalid.hamdn@gmail.com", "khalid.hamdn@microsoft.com",
+      "khalid.hamdaaaaaaaaaaaaaaaaaaaan@gmail.com"};
 
   test(finalTestRegex, finalTestRegexTrues, finalTestRegexFalses);
 
