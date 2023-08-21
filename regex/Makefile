@@ -7,8 +7,8 @@ SRCS = *.cpp
 $(TARGET): $(SRCS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SRCS)
 
-analyzer:
-	$(CXX) $(CXXFLAGS) -o $(ANALYZER_TARGET) $(ANALYZER_SRC)
+debug:
+	$(CXX) $(CXXFLAGS) -g -o $(TARGET) $(SRCS)
 
 clean:
 	rm -f $(TARGET) && rm -f $(ANALYZER_TARGET)

@@ -195,25 +195,27 @@ public:
 
     // stack stores the current state and the current character index being
     // explored
-    std::vector<std::pair<int, char>> stack;
+    std::vector<std::pair<int, int> > stack;
     // add the intial state onto the stack
     std::pair<int, int> initial = std::make_pair(this->startState, 0);
     stack.push_back(initial);
 
     while (!stack.empty()) {
-      std::pair<int, int> candidate = stack[0];
+      std::pair<int, int> candidate = stack[stack.size()-1];
       stack.pop_back();
 
-      // std::cout << "Candidate " << candidate.first << ", " <<
-      // candidate.second << ", transitionEnd: " << transitionEndsAt <<
-      // std::endl;
+	  /*
+      std::cout << "Candidate " << candidate.first << ", " <<
+      candidate.second << ", transitionEnd: " << transitionEndsAt <<
+      std::endl;
+*/
       if (candidate.second == transitionEndsAt &&
           candidate.first == this->endAcceptanceState) {
         return true;
       }
 
       // epsilon transitions
-      std::unordered_map<int, std::unordered_set<int>>::iterator found =
+      std::unordered_map<int, std::unordered_set<int> >::iterator found =
           this->epsilonTransitions.find(candidate.first);
       if (found != this->epsilonTransitions.end()) {
         std::unordered_set<int> epsilonTransitions =
@@ -230,32 +232,33 @@ public:
       if (candidate.second == transitionEndsAt) {
         continue;
       }
-
+	  
       // action based transitions
       std::unordered_map<
           int,
-          std::unordered_map<std::string, std::unordered_set<int>>>::iterator
+          std::unordered_map<std::string, std::unordered_set<int> > >::iterator
           foundTransitionAbleState = this->transitions.find(candidate.first);
       if (foundTransitionAbleState != this->transitions.end()) {
-        std::unordered_map<std::string, std::unordered_set<int>>
+        std::unordered_map<std::string, std::unordered_set<int> >
             actionTransitions = this->transitions[candidate.first];
 
         std::string symbol = std::string(1, input.at(candidate.second));
-        std::unordered_map<std::string, std::unordered_set<int>>::iterator
+
+        std::unordered_map<std::string, std::unordered_set<int> >::iterator
             foundSymbol = actionTransitions.find(symbol);
 
         if (foundSymbol != actionTransitions.end()) {
           std::unordered_set<int> nextStates = actionTransitions[symbol];
           int nextIdx = candidate.second + 1;
           for (int nextState : nextStates) {
+			// std::cout << "HERE " << nextState << ", " << nextIdx << std::endl;
+
             std::pair<int, int> exploration =
                 std::make_pair(nextState, nextIdx);
             stack.push_back(exploration);
           }
         }
       }
-
-      // push them onto the stack
     }
 
     return false;
@@ -431,13 +434,21 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
       std::pair<int, int> statesForMatchX = symbolMapping.at(x);
       std::pair<int, int> statesForMatchY = symbolMapping.at(y);
 
+      /*std::cout << "Alternating X and Y: " << statesForMatchX.first << ", "
+                << statesForMatchX.second << " ; " << statesForMatchY.first
+                << " , " << statesForMatchY.second << std::endl;
+
+      std::cout << "Current lastStateStart " << lastStateStart
+                << " and current lastStateEnd " << lastStateEnd << std::endl;
+	*/
+
       // when doing a fork we basically break the connection between the current
       // start state and end state then we add our fork in between
       int preForkCommonState = nfa->createNewState();
       int postForkCommonState = nfa->createNewState();
 
       // break connection
-      nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
+      // nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
 
       // create the alternator
       nfa->addEpsilonTransition(preForkCommonState, statesForMatchX.first);
@@ -450,23 +461,25 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
         nfa->transferEpsilonTransitions(statesForMatchX.second,
                                         postForkCommonState);
       }
-
+	
+	  // when we do a concat, and then another concat and then do an alternator the concats are sequenced.... this aint good
       if (nfa->hasEpsilonTransitions(statesForMatchY.second)) {
         std::cout << "Attempt transfer from " << statesForMatchY.second
                   << " to " << postForkCommonState << std::endl;
-        nfa->transferEpsilonTransitions(statesForMatchY.second,
-                                        postForkCommonState);
+		nfa->transferEpsilonTransitions(statesForMatchY.second, postForkCommonState);
       }
 
       nfa->addEpsilonTransition(statesForMatchX.second, postForkCommonState);
       nfa->addEpsilonTransition(statesForMatchY.second, postForkCommonState);
 
+	  /*
       if (!nfa->isStateChainedAlready(postForkCommonState)) {
         nfa->addEpsilonTransition(postForkCommonState, lastStateEnd);
       }
+	  */
 
       // add the alternator into the nfa
-      nfa->addEpsilonTransition(lastStateStart, preForkCommonState);
+      // nfa->addEpsilonTransition(lastStateStart, preForkCommonState);
 
       // find the x and y states start and ends for both and then create an
       // alternator then take their combined start and end and store in the
@@ -477,7 +490,7 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
       symbolMapping.insert(std::make_pair(
           alternated, std::make_pair(preForkCommonState, postForkCommonState)));
 
-      lastStateEnd = preForkCommonState;
+      // lastStateEnd = preForkCommonState;
 
       stack.push_back(alternated);
     } else if (primitiveCandidate == "+") {
@@ -497,8 +510,8 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
       // lastStateStart -> pseudoStartForConcatState -> x -> y
       // ->pseudoEndStateForConcatState -> lastStateEnd -> the rest of the
       // expression
-      nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
-
+      //nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
+	/*
       std::cout << "Concatenating X and Y: " << statesForMatchX.first << ", "
                 << statesForMatchX.second << " ; " << statesForMatchY.first
                 << " , " << statesForMatchY.second << std::endl;
@@ -506,6 +519,7 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
       std::cout << "Current lastStateStart " << lastStateStart
                 << " and current lastStateEnd " << lastStateEnd << std::endl;
 
+	*/
       if (nfa->isStateChainedAlready(statesForMatchX.second)) {
         nfa->transferEpsilonTransitions(statesForMatchX.second,
                                         statesForMatchY.second);
@@ -515,22 +529,24 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 
       // add them into the existing expr head (head because we are evaluating
       // reverse polish
-      nfa->addEpsilonTransition(lastStateStart, statesForMatchX.first);
+      // nfa->addEpsilonTransition(lastStateStart, statesForMatchX.first);
 
       // check if last state is already connected in a terminating chain
       // if a node has an epsilon transition out of it means it was already
       // connected
+	  /*
       if (!nfa->isStateChainedAlready(statesForMatchY.second) &&
           statesForMatchY.second != lastStateEnd) {
         nfa->addEpsilonTransition(statesForMatchY.second, lastStateEnd);
       }
+	  */
 
       std::string concatenated = "(" + x + ")+(" + y + ")";
       symbolMapping.insert(
           std::make_pair(concatenated, std::make_pair(statesForMatchX.first,
                                                       statesForMatchY.second)));
 
-      lastStateEnd = statesForMatchX.first;
+      //lastStateEnd = statesForMatchX.first;
 
       stack.push_back(concatenated);
     } else if (primitiveCandidate == "*") {
@@ -571,7 +587,7 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 
       stack.push_back(kleene);
 
-      lastStateEnd = preForkCommonState;
+      // lastStateEnd = preForkCommonState;
     } else {
       stack.push_back(primitiveCandidate);
     }
@@ -583,37 +599,29 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
               << ", last state end " << lastStateEnd << std::endl;
   }
 
-  // if our answer is at the end do we need to add an epsilon for it?
-  if (stack.size() != 0) {
-    std::string x = stack.at(0);
-    stack.pop_back();
+  // connect everything in stack as concat
+  if (stack.size() > 0) {
+	std::cout << "Concatenating Remaining Sub-Automatas" << std::endl;
+	while (!stack.empty()) {
+		std::string x = stack.at(stack.size() - 1);
+		stack.pop_back();
 
-    std::pair<int, int> xState = symbolMapping.at(x);
+		std::pair<int, int> xState = symbolMapping.at(x);
 
-    if (xState.first != lastStateEnd) {
-      std::cout << "WARNING: This should only execute if there was only one "
-                   "item in the regular expression"
-                << std::endl;
+		nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
+		//nfa->transferEpsilonTransitions(lastStateStart, xState.first);
 
-      assert(stack.size() == 0);
+		nfa->addEpsilonTransition(lastStateStart, xState.first);
 
-      nfa->removeEpsilonTransition(lastStateStart, lastStateEnd);
-      nfa->addEpsilonTransition(lastStateStart, xState.first);
+		// check if last state is already connected in a terminating chain
+		// if a node has an epsilon transition out of it means it was already
+		// connected
+		nfa->addEpsilonTransition(xState.second, lastStateEnd);
 
-      // check if last state is already connected in a terminating chain
-      // if a node has an epsilon transition out of it means it was already
-      // connected
-      if (!nfa->isStateChainedAlready(xState.second)) {
-        nfa->addEpsilonTransition(xState.second, lastStateEnd);
-      }
+		lastStateEnd = xState.first;
     }
-
-    lastStateEnd = xState.first;
-
-    std::cout << "Verify postfix by checking converted version:" << std::endl;
-
-    std::cout << x << std::endl;
   }
+
 
   return nfa;
 }
@@ -636,11 +644,19 @@ void test(const std::string &regex, std::vector<std::string> matches,
   std::cout << "######## Evaluate against NFA #########" << std::endl;
 
   for (const std::string &trues : matches) {
-    assert(nfa->runSimulation(trues));
+    bool mustBeTrue = nfa->runSimulation(trues);
+	if (!mustBeTrue) {
+		std::cout << "Test case " << trues << " FAILED against Regex " << regex << std::endl;
+		assert(false);
+	}
   }
 
   for (const std::string &falses : notMatches) {
-    assert(!nfa->runSimulation(falses));
+    bool mustBeFalse = nfa->runSimulation(falses);
+	if (mustBeFalse) {
+		std::cout << "Test case " << falses << " FAILED against Regex " << regex << std::endl;
+		assert(false);
+	}
   }
 
   std::cout << "-------- Test Passes ---------" << std::endl;
@@ -652,7 +668,7 @@ int main() {
 
   // single element
   std::string singleA = "a";
-  std::vector<std::string> singleFalses = {"b", "c", ""};
+  std::vector<std::string> singleFalses = {"b", "c", "ab"};
   std::vector<std::string> singleTrues = {"a"};
   test(singleA, singleTrues, singleFalses);
 
@@ -672,4 +688,42 @@ int main() {
   std::vector<std::string> concatenationTrues = {"abc"};
 
   test(concatenationRegex, concatenationTrues, concatenationFalses);
+
+  // quad concat
+  std::string quadConcatenationRegex = "a+b+c+d";
+  std::vector<std::string> quadConcatenationFalses = {"", "a",  "b",   "c",  "ab",
+                                                  "ac", "acb", "cba", "acbd", "abc"};
+  std::vector<std::string> quadConcatenationTrues = {"abcd"};
+
+  test(quadConcatenationRegex, quadConcatenationTrues, quadConcatenationFalses);
+
+  // binary alternator
+  std::string binaryAlternatorRegex = "a|b";
+  std::vector<std::string> binaryAlternatorFalses = {"", "c",  "ab",
+                                                  "ac"};
+  std::vector<std::string> binaryAlternatorTrues = {"a", "b"};
+
+  test(binaryAlternatorRegex, binaryAlternatorTrues, binaryAlternatorFalses);
+
+  // quad alternator
+  std::string quadAlternatorRegex = "a|b|c|d";
+  std::vector<std::string> quadAlternatorFalses = {"", "f",  "ab",
+                                                  "ac"};
+
+  std::vector<std::string> quadAlternatorTrues = {"a", "b", "c", "d"};
+
+  test(quadAlternatorRegex, quadAlternatorTrues, quadAlternatorFalses);
+
+  // alternator and concatenation combos
+  std::string altConCombo1Regex = "(a+b)|(c+d)";
+  std::vector<std::string> altConCombo1Falses = {"", "a", "b", "c", "d", "ac", "ad", "dca"};
+  std::vector<std::string> altConCombo1Trues = {}; // {"ab", "cd"};
+
+  test(altConCombo1Regex, altConCombo1Trues, altConCombo1Falses);
+
+  std::string altConCombo2Regex = "(a+b)|c";
+  std::vector<std::string> altConCombo2Falses = { "a" "ac", " ", "" };
+  std::vector<std::string> altConCombo2Trues { "ab", "c" };
+  
+  test(altConCombo2Regex, altConCombo2Trues, altConCombo2Falses);
 }
