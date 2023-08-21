@@ -178,7 +178,6 @@ public:
    * if there are any explorations that result in an accepted state
    * we return true, otherwise false.
    */
-  // TODO: infinite loop stop
   bool runSimulation(const std::string &input) {
     int hardLimitSelfLoop = 100;
     std::unordered_map<int, int> selfLoopTransitions;
@@ -210,7 +209,7 @@ public:
         for (int nextState : epsilonTransitions) {
           std::pair<int, int> toExplore =
               std::make_pair(nextState, candidate.second);
-          // TODO: Check if already looped before and if at max limit
+          // Check if already looped before and if at max limit
           std::unordered_map<int, int>::iterator loopedBefore =
               selfLoopTransitions.find(nextState);
           if (loopedBefore != selfLoopTransitions.end() &&
