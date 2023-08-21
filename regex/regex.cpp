@@ -114,8 +114,8 @@ public:
   const int endAcceptanceState =
       1; // Based on how states are created 1 is always the accepting state
 
-  static std::shared_ptr<Nfa> createEpsilonNfa() {
-    std::shared_ptr<Nfa> base(new Nfa);
+  static std::unique_ptr<Nfa> createEpsilonNfa() {
+    std::unique_ptr<Nfa> base = std::make_unique<Nfa>();
     base->addEpsilonTransition(base->createNewState(), base->createNewState());
 
     base->addFinalState(base->endAcceptanceState);
@@ -386,12 +386,12 @@ infixToPostFixTranslation(std::vector<std::string> infix) {
 // Create an NFA and change its topology as we iterate through the regular
 // expression return the NFA back to the invoker. This Nfa now has all the
 // states and transitions needed to be able to match a pattern
-std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
+std::unique_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
   // all our primitive operators can be treated as binary so I will
   // solve them the same way we do mathematical binary operators at
   // this point we can only have primitive operators of Concatenation
   // and alternations infix to postfix took care of handling groupings
-  const std::shared_ptr<Nfa> nfa = Nfa::createEpsilonNfa();
+  std::unique_ptr<Nfa> nfa = Nfa::createEpsilonNfa();
 
   const int lastStateStart = nfa->startState;
   int lastStateEnd = nfa->endAcceptanceState;
@@ -568,7 +568,7 @@ void test(const std::string &regex, std::vector<std::string> matches,
   std::vector<std::string> processed = preProcessRegex(regex);
   std::vector<std::string> postFixed = infixToPostFixTranslation(processed);
 
-  std::shared_ptr<Nfa> nfa = buildNfa(postFixed);
+  std::unique_ptr<Nfa> nfa = buildNfa(postFixed);
 
   std::cout << "######## Completed Nfa: for " << regex << " #########"
             << std::endl;
