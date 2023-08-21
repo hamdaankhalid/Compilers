@@ -218,6 +218,18 @@ public:
         for (int nextState : epsilonTransitions) {
           std::pair<int, int> toExplore =
               std::make_pair(nextState, candidate.second);
+		  // TODO: Check if already looped before and if at max limit
+		  std::unordered_map<int, int>::iterator loopedBefore = selfLoopTransitions.find(nextState);
+		  if (loopedBefore != selfLoopTransitions.end() && selfLoopTransitions[nextState] > hardLimitSelfLoop) {
+			  continue;
+		  }
+
+		  if (loopedBefore != selfLoopTransitions.end()) {
+			  selfLoopTransitions[nextState] += 1;
+		  } else {
+			  selfLoopTransitions[nextState] = 1;
+		  }
+
           stack.push_back(toExplore);
         }
       }
@@ -649,4 +661,54 @@ int main() {
   std::vector<std::string> altConCombo3Trues { "abd", "acd" };
 
   test(altConCombo3Regex, altConCombo3Trues, altConCombo3Falses);
+
+  // kleene
+  std::string simpleKleene = "a*";
+  std::vector<std::string> simpleKleeneFalses = { "b", "gdfsd" };
+  std::vector<std::string> simpleKleeneTrues = {"", "a", "aa" , "aaaaaaaaaaaaaaa"};
+
+  test(simpleKleene, simpleKleeneTrues, simpleKleeneFalses);
+
+  // concatenate kleene combo
+  std::string concatKleeneCombo1Regex = "(c+d)*";
+  std::vector<std::string> concatKleeneCombo1Falses = { "a", "bc" "de", "d" };
+  std::vector<std::string> concatKleeneCombo1Trues = { "", "cd", "cdcdcd" };
+
+  test(concatKleeneCombo1Regex, concatKleeneCombo1Trues, concatKleeneCombo1Falses);
+
+  std::string concatKleeneCombo2Regex = "c+(o)*";
+  std::vector<std::string> concatKleeneCombo2Falses = { "cool", "a", "dog", ""};
+  std::vector<std::string> concatKleeneCombo2Trues = { "c", "co", "coooooo" };
+
+  test(concatKleeneCombo2Regex, concatKleeneCombo2Trues, concatKleeneCombo2Falses);
+
+  // alternator kleene combo
+  std::string altKleeneCombo1 = "(c|o)*";
+  std::vector<std::string> altKleeneCombo1Falses = { "a", "aa" };
+  std::vector<std::string> altKleeneCombo1Trues = { "", "cc", "oo", "coco", "coocoo", "cooo", "ooooc" };
+
+  test(altKleeneCombo1, altKleeneCombo1Trues, altKleeneCombo1Falses);
+
+  // alternator concat kleen combo
+  std::string allCombo = "d+(a*)";
+  std::vector<std::string> allComboFalses = { "", "do", "dao", "a" };
+  std::vector<std::string> allComboTrues = { "d", "da", "daaa" };
+  
+  test(allCombo, allComboTrues, allComboFalses);
+
+
+  std::string allCombo2 = "d+(a*)+(n|o)+i";
+  std::vector<std::string> allCombo2Falses = { "", "dock", "day", "a" "daaa", "da", "d", "dano", "dno"};
+  std::vector<std::string> allCombo2Trues = { "dni", "dani", "daaani", "daoi", "doi"};
+  
+  test(allCombo2, allCombo2Trues, allCombo2Falses);
+
+  // all pattern mega regex
+  std::string finalTestRegex = "k+h+a+l+i+d+.+h+a+m+d+(a*)+n+@+((g+m+a+i+l)|(m+i+c+r+o+s+o+f+t))+.+c+o+m";
+  std::vector<std::string> finalTestRegexFalses = { "khalid.hamdaan@yahoo.com", "khalid.ham" };
+  std::vector<std::string> finalTestRegexTrues = { "khalid.hamdaan@gmail.com", "khalid.hamdaan@microsoft.com", "khalid.hamdn@gmail.com", "khalid.hamdn@microsoft.com", "khalid.hamdaaaaaaaaaaaaaaaaaaaan@gmail.com" };
+
+  test(finalTestRegex, finalTestRegexTrues, finalTestRegexFalses);
+
+  return 0;
 }
