@@ -198,16 +198,11 @@ public:
 		std::pair<int, int> candidate = stack[0];
 		stack.pop_back();	
 		
-	    std::cout << "Candidate " << candidate.first << ", " << candidate.second << std::endl;
+	    // std::cout << "Candidate " << candidate.first << ", " << candidate.second << ", transitionEnd: " << transitionEndsAt << std::endl;
 		if (candidate.second == transitionEndsAt && candidate.first == this->endAcceptanceState) {
 			return true;
 		}
-
-		if (candidate.second == transitionEndsAt && candidate.first!= this->endAcceptanceState) {
-			return false;
-		}
-		
-		
+	
 		// epsilon transitions
 		std::unordered_map<int, std::unordered_set<int> >::iterator found = this->epsilonTransitions.find(candidate.first);
 		if (found != this->epsilonTransitions.end()) {
@@ -216,6 +211,10 @@ public:
 				std::pair<int, int> toExplore = std::make_pair(nextState, candidate.second);
 				stack.push_back(toExplore);
 			}
+		}
+
+		if (candidate.second == transitionEndsAt) {
+			continue;
 		}
 
 		// action based transitions
@@ -475,21 +474,19 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 	  std::cout << "Concatenating X and Y: " << statesForMatchX.first << ", " << statesForMatchX.second << " ; " << statesForMatchY.first << " , " << statesForMatchY.second << std::endl;
 
 	  std::cout << "Current lastStateStart " << lastStateStart << " and current lastStateEnd " << lastStateEnd << std::endl;
-
+	  
+	  if (nfa->isStateChainedAlready(statesForMatchX.second)) {
+		nfa->transferEpsilonTransitions(statesForMatchX.second, statesForMatchY.second);
+	  }
 	  // connect x and y
 	  nfa->addEpsilonTransition(statesForMatchX.second, statesForMatchY.first);
-	  
-	  // TODO: work on transfer when connecting shit
-	  if (nfa->isStateChainedAlready(statesForMatchX.second)) {
-		nfa->transferEpsilonTransitions(statesForMatchX.second, statesForMatchY.first);
-	  }
 
 	  // add them into the existing expr head (head because we are evaluating reverse polish
 	  nfa->addEpsilonTransition(lastStateStart, statesForMatchX.first);
 	  
 	  // check if last state is already connected in a terminating chain
 	  // if a node has an epsilon transition out of it means it was already connected
-	  if (!nfa->isStateChainedAlready(statesForMatchY.second)) {
+	  if (!nfa->isStateChainedAlready(statesForMatchY.second) && statesForMatchY.second != lastStateEnd) {
 		nfa->addEpsilonTransition(statesForMatchY.second, lastStateEnd);
 	  }
 
@@ -582,20 +579,11 @@ std::shared_ptr<Nfa> buildNfa(std::vector<std::string> postFixed) {
 }
 
 void test(const std::string& regex, std::vector<std::string> matches, std::vector<std::string> notMatches) {
-
-}
-
-int main() {
-  std::cout << "############ REGULAR EXPRESSION PARSER & COMPILER #############"
-            << std::endl;
-
-  // std::string expr = "a+b|a+(c|d)";
-  std::string expr = "(a+b)+c";
-  std::cout << "INFIX Regex: " << expr << std::endl;
+  std::cout << "INFIX Regex: " << regex << std::endl;
 
   std::cout << "######## COMPILE TO NFA ########" << std::endl;
 
-  std::vector<std::string> processed = preProcessRegex(expr);
+  std::vector<std::string> processed = preProcessRegex(regex);
   std::vector<std::string> postFixed = infixToPostFixTranslation(processed);
 
   std::shared_ptr<Nfa> nfa = buildNfa(postFixed);
@@ -605,16 +593,26 @@ int main() {
   nfa->print();
 
   std::cout << "######## Evaluate against NFA #########" << std::endl;
+  
+  for (const std::string& trues : matches) {
+	  assert(nfa->runSimulation(trues));
+  }
 
-  bool result = nfa->runSimulation("a");
-  std::cout<< result << std::endl;
+  for (const std::string& falses : notMatches) {
+	  assert(!nfa->runSimulation(falses));
+  }
 
-  result = nfa->runSimulation("ab");
-  std::cout<< result << std::endl;
+  std::cout << "-------- Test Passes ---------" << std::endl;
+}
 
-  result = nfa->runSimulation("bc");
-  std::cout<< result << std::endl;
+int main() {
+  std::cout << "############ REGULAR EXPRESSION PARSER & COMPILER #############"
+            << std::endl;
 
-  result = nfa->runSimulation("abc");
-  std::cout<< result << std::endl;
+  // std::string expr = "a+b|a+(c|d)";
+  std::string concatenationRegex = "(a+b)+c";
+  std::vector<std::string> concatenationFalses = {"a", "b", "c", "ab", "ac", "acb", "cba"};
+  std::vector<std::string> concatenationTrues = {"abc"};
+  
+  test(concatenationRegex, concatenationTrues, concatenationFalses);
 }
