@@ -43,5 +43,5 @@ function main() {
 
   cat.age = cat.age^2;
   
-  return y
+  return y;
 }

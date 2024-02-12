@@ -1,0 +1,15 @@
+/Users/hamdaankhalid/compilers/hklang/parser/bin/Debug/net8.0/parser
+/Users/hamdaankhalid/compilers/hklang/parser/bin/Debug/net8.0/parser.deps.json
+/Users/hamdaankhalid/compilers/hklang/parser/bin/Debug/net8.0/parser.runtimeconfig.json
+/Users/hamdaankhalid/compilers/hklang/parser/bin/Debug/net8.0/parser.dll
+/Users/hamdaankhalid/compilers/hklang/parser/bin/Debug/net8.0/parser.pdb
+/Users/hamdaankhalid/compilers/hklang/parser/obj/Debug/net8.0/parser.GeneratedMSBuildEditorConfig.editorconfig
+/Users/hamdaankhalid/compilers/hklang/parser/obj/Debug/net8.0/parser.AssemblyInfoInputs.cache
+/Users/hamdaankhalid/compilers/hklang/parser/obj/Debug/net8.0/parser.AssemblyInfo.cs
+/Users/hamdaankhalid/compilers/hklang/parser/obj/Debug/net8.0/parser.csproj.CoreCompileInputs.cache
+/Users/hamdaankhalid/compilers/hklang/parser/obj/Debug/net8.0/parser.sourcelink.json
+/Users/hamdaankhalid/compilers/hklang/parser/obj/Debug/net8.0/parser.dll
+/Users/hamdaankhalid/compilers/hklang/parser/obj/Debug/net8.0/refint/parser.dll
+/Users/hamdaankhalid/compilers/hklang/parser/obj/Debug/net8.0/parser.pdb
+/Users/hamdaankhalid/compilers/hklang/parser/obj/Debug/net8.0/parser.genruntimeconfig.cache
+/Users/hamdaankhalid/compilers/hklang/parser/obj/Debug/net8.0/ref/parser.dll

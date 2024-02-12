@@ -1,3 +1,4 @@
+use serde::Serialize;
 use std::env;
 use std::fs;
 
@@ -72,7 +73,7 @@ struct IntermediateToken {
     column: u32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 enum TokenType {
     Keyword,
     Identifier,
@@ -84,6 +85,7 @@ enum TokenType {
     LogicalOp,
 }
 
+#[derive(Serialize)]
 #[allow(unused)]
 #[derive(Clone, Debug)]
 struct Token {
@@ -259,11 +261,11 @@ fn tokenize(code: String) -> Result<Vec<Token>, String> {
             {
                 token_type = Some(TokenType::LogicalOp);
             } else if matches!(token.token_type, IntermediateTokenType::Identifier)
-                && is_number(&token.value.as_str()) {
-                    // we match only on identifier and not literal
-                    token_type = Some(TokenType::Number);
-                }
-            else {
+                && is_number(&token.value.as_str())
+            {
+                // we match only on identifier and not literal
+                token_type = Some(TokenType::Number);
+            } else {
                 token_type =
                     Some(intermediate_token_type_to_token_type(&token.token_type).unwrap());
             }
@@ -338,6 +340,9 @@ fn main() {
 
     match tokens {
         Err(e) => println!("Tokenizer found error: {}", e),
-        Ok(t) => t.iter().for_each(|a| println!("{:?}", a)),
+        Ok(t) => t.iter().for_each(|a| {
+            let json_token = serde_json::to_string(&a).expect("Failed to serialize to JSON");
+            println!("{:?}", json_token);
+        }),
     };
 }
