@@ -1,4 +1,4 @@
-# JSON CFG
+## JSON CFG
 
 Value    -> Object | Array | String | Number | True | False | Null
 Object   -> '{' Members '}'
