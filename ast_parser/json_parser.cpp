@@ -235,9 +235,20 @@ class JsonTokenStream {
 // ------------ TODO: Parser -------------------
 
 enum JsonNodeType {
+	// Internal node that we only use in the parser to show errors
+	ErrorNodeType,
+	ObjectNodeType,
+	ArrayNodeType,
+	StringNodeType,
+	NumberNodeType,
+	BooleanNodeType,
+	NullNodeType,
 };
 
+// Different type of nodes such
+// as Object, Err, Arr, String, Number, Bool, Null
 union JsonNodeValue {
+
 };
 
 struct JsonNode {

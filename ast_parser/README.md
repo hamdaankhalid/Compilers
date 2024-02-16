@@ -14,3 +14,18 @@ Null     -> 'null'
 characters -> any valid characters except '"'
 digit    -> '0' | '1' | ... | '9'
 
+- TokenStream already takes care of providing primitive tokens.
+```
+enum TokenType:
+	String,
+	Number,
+	LeftParenthesis,
+	RightParenthesis,
+	LeftBracket,
+	RightBracket,
+	Colon,
+	Comma,
+	Null,
+	True,
+	False,
+```
