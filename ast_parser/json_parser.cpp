@@ -1,10 +1,13 @@
 #include <iostream>
+#include <memory>
 #include <ostream>
 #include <sstream>
 #include <optional>
 #include <vector>
+#include <queue>
 #include <variant>
 
+// -------------------- Tokenizer and corresponding data types
 enum TokenType {
 	String,
 	Number,
@@ -15,6 +18,8 @@ enum TokenType {
 	Colon,
 	Comma,
 	Null,
+	True,
+	False,
 };
 
 struct Token {
@@ -25,111 +30,148 @@ struct Token {
 class JsonTokenStream {
 	public:
 
-	JsonTokenStream(std::stringstream stream): m_stream(std::move(stream)) {}
+	JsonTokenStream(std::stringstream stream): m_stream(std::move(stream)), m_peeked(std::nullopt){}
 	
 	bool HasTokens() {
-		return m_stream.good() && m_stream.peek() != EOF;
+		return m_stream.good() && m_stream.peek() != EOF || m_peeked != std::nullopt;
 	}
 	
+	std::pair<Token, bool> Peek() {
+		if (m_peeked == std::nullopt) {
+			m_peeked = _readInToken();
+		}
+		
+		return m_peeked.value();
+	}
+
 	// result, valid or invalid
 	std::pair<Token, bool> Get() {
-		// read in all useless whitespace
-		char currChar = ' ';
-		while (!m_stream.eof() && (currChar = m_stream.get()) == ' ');
-		Token res;
-		if (currChar == ' ') {
-			return {res, false};
+		if (m_peeked != std::nullopt) {
+			std::pair<Token, bool> tkn = m_peeked.value();
+			m_peeked = std::nullopt;
+			return tkn;
 		}
 
-		// at this point we know we are at a valid non EOF char to be read and have a token created from
-		if (currChar == '{') {
-			res.type = LeftParenthesis;
-			res.lexeme = '{';
-			return { res, true };
-		}
-
-		if (currChar == '}') {
-			res.type = RightParenthesis;
-			res.lexeme = '}';
-			return { res, true };
-		}
-
-		if (currChar == '[') {
-			res.type = LeftBracket;
-			res.lexeme = '[';
-			return { res, true };
-		}
-
-		if (currChar == ']') {
-			res.type = RightBracket;
-			res.lexeme = ']';
-			return { res, true };
-		}
-
-		if (currChar == ',') {
-			res.type = Comma;
-			res.lexeme = ',';
-			return { res, true };
-		}
-	
-		if (currChar == ':') {
-			res.type = Colon;
-			res.lexeme = ':';
-			return { res, true };
-		}
-
-		if (currChar == '\"') {
-			// start of a string
-			std::string jsonStr;
-			res.type = String;
-			while (true) {
-				if (m_stream.eof())	{
-					return { res, false };
-				}
-
-				char next = m_stream.get();
-				if (next == '\"') {
-					// if the last element in our sstream is not an escape character and we have reached second quote 
-					// this says we are at end of string
-					if (jsonStr.back() != '\\') {
-						res.lexeme = jsonStr;
-						return { res, true };
-					}
-					jsonStr += next;
-				}
-				
-				jsonStr += next;
-			}
-
-		}
-
-		// check if null symbol
-		if (currChar == 'n') {
-			res.type = Null;
-
-			const char nextAssertions[] = {'u', 'l', 'l'};		
-			for (int i = 0; i < 3; i++) {
-				if (m_stream.eof() || m_stream.get() != nextAssertions[i]) {
-					return { res , false };
-				}
-			}
-			res.lexeme = "Null";
-			return { res, true };
-		}
-
-		// check if start of a number
-		if (currChar == '-' || (currChar >= '0' && currChar <= '9')) {
-
-			std::pair<Token, bool> numResult = tokenizeNumber(currChar);
-			return numResult;
-		}
-	
-		// invalid token
-		return {res, false};
+		return _readInToken();
 	}
 
 	private:
 		std::stringstream m_stream;	
+		
+		std::optional<std::pair<Token, bool> > m_peeked;
+
+		std::pair<Token, bool> _readInKnownString(TokenType type, char currChar, const std::string& knownStr) {
+			Token res;
+			res.type = type;
+			
+			// we know first char already matches
+			for (int i = 1; i < knownStr.size(); i++) {
+				if (m_stream.eof() || m_stream.get() != knownStr[i]) {
+					return { res , false };
+				}
+			}
+
+			res.lexeme = knownStr;
+			return { res, true };
+		}
+
+		std::pair<Token, bool> _readInToken() {
+			char currChar = ' ';
+			
+			// read in all useless whitespace
+			while (!m_stream.eof() && (currChar = m_stream.get()) == ' ');
+
+			Token res;
+			if (currChar == ' ') {
+				return {res, false};
+			}
+
+			// at this point we know we are at a valid non EOF char to be read and have a token created from
+			if (currChar == '{') {
+				res.type = LeftParenthesis;
+				res.lexeme = '{';
+				return { res, true };
+			}
+
+			if (currChar == '}') {
+				res.type = RightParenthesis;
+				res.lexeme = '}';
+				return { res, true };
+			}
+
+			if (currChar == '[') {
+				res.type = LeftBracket;
+				res.lexeme = '[';
+				return { res, true };
+			}
+
+			if (currChar == ']') {
+				res.type = RightBracket;
+				res.lexeme = ']';
+				return { res, true };
+			}
+
+			if (currChar == ',') {
+				res.type = Comma;
+				res.lexeme = ',';
+				return { res, true };
+			}
+		
+			if (currChar == ':') {
+				res.type = Colon;
+				res.lexeme = ':';
+				return { res, true };
+			}
+
+			if (currChar == '\"') {
+				// start of a string
+				std::string jsonStr;
+				res.type = String;
+				while (true) {
+					if (m_stream.eof())	{
+						return { res, false };
+					}
+
+					char next = m_stream.get();
+					if (next == '\"') {
+						// if the last element in our sstream is not an escape character and
+						// we have reached second quote this says we are at end of string
+						if (jsonStr.back() != '\\') {
+							res.lexeme = jsonStr;
+							return { res, true };
+						}
+						jsonStr += next;
+					}
+					
+					jsonStr += next;
+				}
+
+			}
+			
+			// check if keyword true
+			if (currChar == 't') {
+				return _readInKnownString(True, currChar, "true");
+			}
+
+			if (currChar == 'f') {
+				return _readInKnownString(False, currChar, "false");
+			}
+			
+			// check if null symbol
+			if (currChar == 'n') {
+				return _readInKnownString(Null, currChar, "null");
+			}
+
+			// check if start of a number
+			if (currChar == '-' || (currChar >= '0' && currChar <= '9')) {
+				std::pair<Token, bool> numResult = tokenizeNumber(currChar);
+				return numResult;
+			}
+
+			// invalid token
+			return {res, false};
+		}
+
 		std::pair<Token, bool> tokenizeNumber(char currChar) {
 			Token res;
 			res.type = Number;
@@ -186,31 +228,38 @@ class JsonTokenStream {
 		}
 };
 
-int main() {
-	std::vector<std::pair<std::string, bool> > tests = {
-		{ "null", true },
-		{ "\"meow meow meow\"", true },
-		{ "1738", true },
-		{ "[ \"fuckity\", null, 7]", true },
-		{ "{ \"kit\": \"kat\" }", true },
-		{ "{ \"kit\": 1745 }", true },
-		{ "17.45", true },
-		{ "-17.5", true },
-		{ "-17.5", true },
-		{ "1e3", true },
-		{ "notstrenclosed", false },
-		{ "1e3, 45, -13.4", true },
-		{ "1ee3", false },
-		{ "-1e3", true },
-		{ "-1E3", true },
-		{ "-1e-3", true },
-		{ "--1e-3", false },
-		{ "--1e--3", false },
-		{ "-7.83e-3", true},
-		{ "7.83e-3.5", true},
-		{ "7.83e-3.5.68", false},
-	};
-	
+// ------------ End of tokenizer -----------
+
+
+
+// ------------ TODO: Parser -------------------
+
+enum JsonNodeType {
+};
+
+union JsonNodeValue {
+};
+
+struct JsonNode {
+	JsonNodeType type;
+	JsonNodeValue data;
+}
+
+
+class Parser {
+	public:
+		Parser(std::unique_ptr<JsonTokenStream> scanner): m_scanner(std::move(scanner)) {}
+		
+		JsonNode Parse() {}
+
+	private:
+		JsonTokenStream m_scanner;		
+};
+
+
+// ------------ End of parser ------------
+
+void runTests(std::vector<std::pair<std::string, bool>>& tests) {
 	for (std::pair<std::string, bool> testCase : tests)
 	{
 		std::string test = testCase.first;
@@ -250,5 +299,39 @@ int main() {
 		std::cout << "\n\n";
 	}
 
-	std::cout << "--- Tests completed ---" << std::endl;
+	std::cout << "--- Tokenizer Tests completed ---" << std::endl;
+}
+void testTokenizer() {
+	std::vector<std::pair<std::string, bool> > tests = {
+		{ "null", true },
+		{ "true", true },
+		{ "false", true },
+		{ "\"meow meow meow\"", true },
+		{ "1738", true },
+		{ "[ \"fuckity\", null, 7]", true },
+		{ "{ \"kit\": \"kat\" }", true },
+		{ "{ \"kit\": 1745 }", true },
+		{ "17.45", true },
+		{ "-17.5", true },
+		{ "-17.5", true },
+		{ "1e3", true },
+		{ "notstrenclosed", false },
+		{ "1e3, 45, -13.4", true },
+		{ "1ee3", false },
+		{ "-1e3", true },
+		{ "-1E3", true },
+		{ "-1e-3", true },
+		{ "--1e-3", false },
+		{ "--1e--3", false },
+		{ "-7.83e-3", true},
+		{ "7.83e-3.5", true},
+		{ "7.83e-3.5.68", false},
+		{ "{ \"snickers\" : true, \"foo\": false }", true },
+	};
+	
+	runTests(tests);
 };
+
+int main() {
+	testTokenizer();
+}
