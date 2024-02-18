@@ -1,4 +1,8 @@
+#include <algorithm>
+#include <exception>
 #include <iostream>
+#include <limits>
+#include <unordered_map>
 #include <memory>
 #include <ostream>
 #include <sstream>
@@ -8,6 +12,7 @@
 #include <variant>
 
 // -------------------- Tokenizer and corresponding data types
+
 enum TokenType {
 	String,
 	Number,
@@ -247,24 +252,54 @@ enum JsonNodeType {
 
 // Different type of nodes such
 // as Object, Err, Arr, String, Number, Bool, Null
-union JsonNodeValue {
+struct JsonNode;
 
+struct ObjectNode {
+	std::unordered_map<std::string, JsonNode> properties;
+};
+
+struct ArrayNode {
+	std::vector<JsonNode> vals;
+};
+
+using FlatVal = std::string;
+
+// Would have used enum but this fucker keeps messing up the default constructor issue
+struct JsonNodeValue {
+	std::optional<FlatVal> errorVal;
+	std::optional<ObjectNode> objNode;
+	std::optional<ArrayNode> arrNode;
+	std::optional<FlatVal> strVal;
+	std::optional<FlatVal> number;
+	std::optional<FlatVal> boolVal;
+	std::optional<FlatVal> nullVal;
 };
 
 struct JsonNode {
 	JsonNodeType type;
 	JsonNodeValue data;
-}
+};
 
 
 class Parser {
 	public:
 		Parser(std::unique_ptr<JsonTokenStream> scanner): m_scanner(std::move(scanner)) {}
-		
-		JsonNode Parse() {}
+	
+		std::unique_ptr<JsonNode> Parse() {
+			std::pair<Token, bool> token = m_scanner->Peek();
+
+			std::unique_ptr<JsonNode> node = std::make_unique<JsonNode>();
+			if (!token.second) {
+				node->type = ErrorNodeType;
+				node->data.errorVal = "fuckity";
+				return node;
+			}
+			// TODO: If else on peek and proceed consuming stream
+			return node;
+		}
 
 	private:
-		JsonTokenStream m_scanner;		
+		std::unique_ptr<JsonTokenStream> m_scanner;		
 };
 
 
