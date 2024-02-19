@@ -28,6 +28,7 @@ struct Token {
 };
 
 // Lots of copying here, need to move this to using smart pointers
+// TODO need to check how copying of Token happens for lexeme, are we copying pointer or actual string bytes
 class JsonTokenStream {
 	public:
 
@@ -239,7 +240,7 @@ class JsonTokenStream {
 // ------------ Parser -------------------
 
 enum JsonNodeType {
-	// Internal node that we only use in the parser to show errors
+	// ErrorNodeType is used to represent error found while parsing
 	ErrorNodeType,
 	ObjectNodeType,
 	ArrayNodeType,
@@ -249,8 +250,7 @@ enum JsonNodeType {
 	NullNodeType,
 };
 
-// Different type of nodes such
-// as Object, Err, Arr, String, Number, Bool, Null
+// forward decl
 struct JsonNode;
 
 struct ObjectNode {
@@ -406,10 +406,11 @@ class Parser {
 				
 				if (lookahead.first.type == Comma) {
 					// consume the comma!
+					// in the next iteration when this loop will call MakeJsonNode if this is a trailing comma
+					// then the MakeJsonNode will throw an error and hence handle the case of JSON syntax not
+					// allowing trailing commas
 					m_scanner->Get();
 				}
-
-				lookahead = m_scanner->Peek();
 			}
 
 			if (!lookahead.second || lookahead.first.type != RightParenthesis) {
@@ -450,6 +451,9 @@ class Parser {
 
 				if (lookahead.first.type == Comma) {
 					// consume the comma!
+					// in the next iteration when this loop will call MakeJsonNode if this is a trailing comma
+					// then the MakeJsonNode will throw an error and hence handle the case of JSON syntax not
+					// allowing trailing commas
 					m_scanner->Get();
 				}
 			}
@@ -528,6 +532,7 @@ class Parser {
 
 // ------------ End of parser ------------
 
+// ----------- Driver and Tests ----------
 void testTokenizer() {
 	std::vector<std::pair<std::string, bool> > tests = {
 		{ "null", true },
@@ -619,20 +624,22 @@ void testParser() {
 			\"yay\" \
 			[ null, \"i did it father\", \
 			{ \
-				\"foo\": 0.99 \
-			} \
+				\"foo\": 0.99\
+			}\
 		  ]", ArrayNodeType },
 	};
 	
 	for (std::pair<std::string, JsonNodeType> testCase : tests ) {
 		std::string test = testCase.first;
 
-		std::cout << "Testing " << test << std::endl;
+		std::cout << "Testing with -> " << test << std::endl;
 	
 		JsonNodeType expectedType = testCase.second;
+
 		std::stringstream t(test);
 		std::unique_ptr<JsonTokenStream> tokenstrm(new JsonTokenStream(std::move(t)));
 		Parser parser(std::move(tokenstrm));
+
 		std::unique_ptr<JsonNode> rootNode = parser.MakeJsonNode();
 
 		std::cout << "Result -> ";
@@ -657,7 +664,7 @@ void testParser() {
 
 int main() {
 	testTokenizer();
-	
+
 	std::cout << "********************************\n\n";
 
 	testParser();
