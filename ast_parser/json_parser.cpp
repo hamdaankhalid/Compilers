@@ -1,17 +1,12 @@
-#include <algorithm>
-#include <exception>
 #include <iostream>
-#include <limits>
 #include <unordered_map>
 #include <memory>
 #include <ostream>
 #include <sstream>
 #include <optional>
 #include <vector>
-#include <queue>
-#include <variant>
 
-// -------------------- Tokenizer and corresponding data types
+// -------------------- Tokenizer and corresponding data types --------
 
 enum TokenType {
 	String,
@@ -32,6 +27,7 @@ struct Token {
 	std::string lexeme;
 };
 
+// Lots of copying here, need to move this to using smart pointers
 class JsonTokenStream {
 	public:
 
@@ -42,6 +38,7 @@ class JsonTokenStream {
 	}
 	
 	std::pair<Token, bool> Peek() {
+		// if nothing staged already, read in and stage it for later
 		if (m_peeked == std::nullopt) {
 			m_peeked = _readInToken();
 		}
@@ -51,6 +48,8 @@ class JsonTokenStream {
 
 	// result, valid or invalid
 	std::pair<Token, bool> Get() {
+		// if something was staged from previoud call to peek use that and reset staging area for peek
+		// if something was already staged we dont need to read anything string stream
 		if (m_peeked != std::nullopt) {
 			std::pair<Token, bool> tkn = m_peeked.value();
 			m_peeked = std::nullopt;
@@ -267,13 +266,9 @@ using FlatVal = std::string;
 // Would have used union or std::variant this fucker keeps messing up the default constructor issue
 // Lots of wasted space in this struct that can be avoided if we use Union type
 struct JsonNodeValue {
-	FlatVal errorVal;
+	FlatVal val;
 	ObjectNode objNode;
 	ArrayNode arrNode;
-	FlatVal strVal;
-	FlatVal number;
-	FlatVal boolVal;
-	FlatVal nullVal;
 };
 
 struct JsonNode {
@@ -282,6 +277,43 @@ struct JsonNode {
 	
 	// recursive tree repr print to screen
 	void PrintTreeRepr(int indent = 0) {
+		std::string output = "";
+		switch (type) {
+			case ErrorNodeType:
+			case StringNodeType:
+			case NumberNodeType:
+			case BooleanNodeType:
+			case NullNodeType:
+				for (int i = 0; i < indent; i++)
+					output += ' ';
+				output += data.val;
+				std::cout << output << std::endl;
+				break;
+			case ArrayNodeType:
+				for (int i = 0; i < indent; i++)
+					output += ' ';
+				std::cout << output << '[' << std::endl;
+				for (int i = 0; i < data.arrNode.vals.size(); i++) {
+					data.arrNode.vals[i]->PrintTreeRepr(indent+1);
+					if (i != data.arrNode.vals.size()-1)
+						std::cout << output << ",";
+				}
+				std::cout << output << ']' << std::endl;
+				break;
+			case ObjectNodeType:
+				for (int i = 0; i < indent; i++)
+					output += ' ';
+				std::cout << output << "{ \n";
+
+				for (std::pair<const std::string&, const std::unique_ptr<JsonNode>& >pairs : data.objNode.properties) {
+					std::cout << output << " " << pairs.first << ":\n";
+					pairs.second->PrintTreeRepr(indent+1);
+				}
+
+				std::cout << output << "} \n";
+
+				break;
+		}
 	}
 };
 
@@ -298,7 +330,7 @@ class Parser {
 				std::unique_ptr<JsonNode> node = 
 					std::make_unique<JsonNode>();
 				node->type = ErrorNodeType;
-				node->data.errorVal = "End of tokens from parser before Node formed";
+				node->data.val = "End of tokens from parser before Node formed";
 				return node;
 			}
 
@@ -320,7 +352,7 @@ class Parser {
 					std::unique_ptr<JsonNode> node = 
 						std::make_unique<JsonNode>();
 					node->type = ErrorNodeType;
-					node->data.errorVal = "Unexpected token";
+					node->data.val = "Unexpected token";
 					return node;
 			};
 		}
@@ -343,7 +375,7 @@ class Parser {
 				std::pair<Token, bool> shouldBeStr = m_scanner->Peek();
 				if (!shouldBeStr.second || shouldBeStr.first.type != String) {
 					node->type = ErrorNodeType;
-					node->data.errorVal = "Failed to build object, keys can only be strings";
+					node->data.val = "Failed to build object, keys can only be strings";
 					return node;
 				}
 				// consume Key string
@@ -352,7 +384,7 @@ class Parser {
 				std::pair<Token, bool> shouldBeColon = m_scanner->Peek();
 				if (!shouldBeColon.second || shouldBeColon.first.type != Colon) {
 					node->type = ErrorNodeType;
-					node->data.errorVal = "A string key in a Json Pair in an object should be followed by a ':'";
+					node->data.val = "A string key in a Json Pair in an object should be followed by a ':'";
 					return node;
 				}
 				// consume COLON
@@ -368,7 +400,7 @@ class Parser {
 				lookahead = m_scanner->Peek();
 				if (!lookahead.second) {
 					node->type = ErrorNodeType;
-					node->data.errorVal = "Unexpected end of token stream";
+					node->data.val = "Unexpected end of token stream";
 					return node;
 				}
 				
@@ -382,7 +414,7 @@ class Parser {
 
 			if (!lookahead.second || lookahead.first.type != RightParenthesis) {
 				node->type = ErrorNodeType;
-				node->data.errorVal = "Unexpected end of object while parsing the tokens, valid tokens finished before object ended";
+				node->data.val = "Unexpected end of object while parsing the tokens, valid tokens finished before object ended";
 				return node;
 			}
 			
@@ -392,7 +424,7 @@ class Parser {
 			return node;
 		}
 		
-		// TODO: '[' JsonNode ',' .. ']'
+		// '[' JsonNode ',' .. ']'
 		std::unique_ptr<JsonNode> makeArray() {
 			std::unique_ptr<JsonNode> node = std::make_unique<JsonNode>();
 			node->type = ArrayNodeType;
@@ -412,7 +444,7 @@ class Parser {
 				lookahead = m_scanner->Peek();
 				if (!lookahead.second) {
 					node->type = ErrorNodeType;
-					node->data.errorVal = "Unexpected end of token stream while building array";
+					node->data.val = "Unexpected end of token stream while building array";
 					return node;
 				}
 
@@ -424,7 +456,7 @@ class Parser {
 
 			if (!lookahead.second || lookahead.first.type != RightBracket) {
 				node->type = ErrorNodeType;
-				node->data.errorVal = "Array ended without valid Right Bracket Token";
+				node->data.val = "Array ended without valid Right Bracket Token";
 				return node;
 			}
 
@@ -438,11 +470,11 @@ class Parser {
 
 			if (!shouldBeString.second || shouldBeString.first.type != String) {
 				node->type = ErrorNodeType;
-				node->data.errorVal = "Expected String Node";
+				node->data.val = "Expected String Node";
 				return node;
 			}
 
-			node->data.strVal = shouldBeString.first.lexeme;
+			node->data.val = shouldBeString.first.lexeme;
 			return node;
 		}
 
@@ -453,11 +485,11 @@ class Parser {
 
 			if (!shoudlBeBool.second ||( shoudlBeBool.first.type != True && shoudlBeBool.first.type != False)) {
 				node->type = ErrorNodeType;
-				node->data.errorVal = "Expected Boolean Node";
+				node->data.val = "Expected Boolean Node";
 				return node;
 			}
 		
-			node->data.boolVal = shoudlBeBool.first.type == True ? "true" : "false";
+			node->data.val = shoudlBeBool.first.type == True ? "true" : "false";
 
 			return node;
 		}
@@ -469,11 +501,11 @@ class Parser {
 
 			if (!shouldBeNumber.second || shouldBeNumber.first.type != Number) {
 				node->type = ErrorNodeType;
-				node->data.errorVal = "Expected Number";
+				node->data.val = "Expected Number";
 				return node;
 			}
 			
-			node->data.number = shouldBeNumber.first.lexeme;
+			node->data.val = shouldBeNumber.first.lexeme;
 			return node;
 		}
 
@@ -481,11 +513,11 @@ class Parser {
 			std::pair<Token, bool> shoudlBeNull = m_scanner->Get();
 			std::unique_ptr<JsonNode> node = std::make_unique<JsonNode>();
 			node->type = NullNodeType;
-			node->data.nullVal = "null";
+			node->data.val = "null";
 
 			if (!shoudlBeNull.second || shoudlBeNull.first.type != Null) {
 				node->type = ErrorNodeType;
-				node->data.errorVal = "Expected NULL";
+				node->data.val = "Expected NULL";
 				return node;
 			}
 						
@@ -503,7 +535,7 @@ void testTokenizer() {
 		{ "false", true },
 		{ "\"meow meow meow\"", true },
 		{ "1738", true },
-		{ "[ \"fuckity\", null, 7]", true },
+		{ "[ \"puckity\", null, 7]", true },
 		{ "{ \"kit\": \"kat\" }", true },
 		{ "{ \"kit\": 1745 }", true },
 		{ "17.45", true },
@@ -609,10 +641,11 @@ void testParser() {
 				<< rootNode->type << " ** " << std::endl;
 			
 			if (rootNode->type == ErrorNodeType) {
-				std::cout << rootNode->data.errorVal << std::endl;
+				std::cout << rootNode->data.val << std::endl;
 			}
-
 		} else {
+			rootNode->PrintTreeRepr();
+
 			std::cout << "** Passed Test Case ** " << std::endl;
 		}
 
