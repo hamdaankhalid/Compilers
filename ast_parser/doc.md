@@ -12,6 +12,39 @@ Parsing of all\*(that i know of) languages can be broken into 2 steps that are p
 
 Tokenizing is responsible for taking a char iterable and then converting it into tokens. Tokens are chunks of chars that represent the keywords, and other primitives of the language, and syntactical components. Tokenizers will do things like ignore extra whitespace and comments.
 
-The tokenizer provides a way to lookahead for the next token, as well as a way to consume that token from the stream, and proceed to reading the next token it creates from the stream.
+The tokenizer provides a way to lookahead for the next token, as well as a way to consume that token from the stream, and proceed to reading the next token it creates from the stream. This gives us the ability to "lookahead".
+
+The parser takes the whitespace stripped tokens and uses them to enforce certain syntax rules, and create nodes corresponding to a "Grammar". The nodes are basically what you are used to seeing in the things like Json parsing libraries that let you read in strings into Json Objects.
+
+Now before we get into the algorithm we need to understand the core building block behind writing a parsing algorithm for a language such as ours. The language in the context of parsing stems from it's grammar. We use context free grammar as a way to represent the rules of our language formally, these rules. Each rule is called a production rule and it is composed of a non-terminal symbol that is described by a sequence of terminal and non-terminal symbols. Terminals are the basic elements of the language, while non-terminals represent syntactic structures composed of terminals and other non-terminals.
+
+The grammar we will be using to implement our parser describes JSON using production rules!
 
 
+- Value    -> Object | Array | String | Number | True | False | Null
+- Object   -> '{' Members '}'
+- Members  -> Pair | Pair ',' Members
+- Pair     -> String ':' Value
+- Array    -> '[' Elements ']'
+- Elements -> Value | Value ',' Elements
+- String   -> '"' characters '"'
+- Number   -> '-'? digit+ ('.' digit+)? (('E'|'e') ('+'|'-')? digit+)?
+- True     -> 'true'
+- False    -> 'false'
+- Null     -> 'null'
+- characters -> any valid characters except '"'
+- digit    -> '0' | '1' | ... | '9'
+
+Based on the above grammar we are using the left values or the non-terminals to describe their structure using a combination of other terminals, and non-terminals such as '{' and '}' and ','. We can read our grammar left to right and we can figure out which "option" from the possible disjoint union of options to pick from by looking one token ahead!
+
+In terms of our tokenizer we need something that can sort of strip away everything else from the input stream and give us a sequence of non-terminals that we can also do lookaheads on.
+
+Recursive Descent Parsing is a top down parsing technique (starts from a start symbol, in our case "Value"), which then uses the token scanner's abiltiy to looahead for the next token and make a decision for what type of production rule to use. Since the Grammar can be Recursive in nature we rely on recursion to expand certain nodes as we parse through the streams of token left to right. The recursion is what allows the parser to handle nested structures such as an object that holds an array of objects...
+
+In my code you will see the idea of peeking to make a decision or syntax checking and consuming a token by calling Get on the tokenizer to making progress in our token stream. Overall, I think the trick is in understandin your grammar and defining the right data structures. Once I had that, the code was fairly a breeze.
+
+We can start with the tokenizer that sort of works on accumulating characters from a string stream based on an understanding of what type of token we are building. At any point we look for violations for the rule and cases where we can safely terminate a token. The accumulating is only performed when someone wants us to read in a a token.
+
+Peeking can be implementing by sort of caching the last read token, and invalidating the "cache" when Get is called aka moving the cursor.
+
+Since tokens work in a stream-like manner and we don't need to get all tokens before parsing. We can use the tokenizer directly in the parser to do things such as lookaheads and make appropriate decisions. As we make decisions we keep progressing the tokenizer till we eventuall reach the end of the token stream.
